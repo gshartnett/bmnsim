@@ -51,7 +51,6 @@ class SpecialUnitaryGroup():
     def generate_structure_constants(self):
 
         structure_constants = {}
-
         '''
         for n in range(1, self.N+1):
             for m in range(1, self.N+1):
@@ -59,6 +58,7 @@ class SpecialUnitaryGroup():
                     print('alpha = %i, beta = %i' %(self.alpha(n,m), self.beta(n,m)))
             print('gamma = %i' % self.gamma(n))
         '''
+
 
         for n in range(1, self.N+1):
             for m in range(1, self.N+1):
