@@ -8,15 +8,17 @@ from typing import Union
 
 class SpecialUnitaryGroup:
     """
-    https://en.wikipedia.org/wiki/Structure_constants
-    https://arxiv.org/pdf/2108.07219.pdf
+    Class for the SU(N) group. Constructs the set of generators
+    and their structure constants, based on:
+        https://en.wikipedia.org/wiki/Structure_constants
+        https://arxiv.org/pdf/2108.07219.pdf
     """
 
     def __init__(self, N):
         self.N = N
         self.structure_constants = self.generate_structure_constants()
         self.generators = self.generate_generators()
-        self.check()
+        self._validate()
 
     def alpha(self, n, m):
         """Symmetric generator indices"""
@@ -136,9 +138,9 @@ class SpecialUnitaryGroup:
 
         return structure_constants
 
-    def check(self):
+    def _validate(self):
         """
-        Check that the structure constants and generators obey the correct
+        Validate that the structure constants and generators obey the correct
         relation.
         """
         for i in range(1, self.N**2 - 1):
@@ -160,6 +162,29 @@ class SpecialUnitaryGroup:
 
 
 def drop_small_coeffs(operator: SparsePauliOp, tol=1e-10) -> SparsePauliOp:
+    """
+    Drop small coefficients in a SparsePauliOp, for example coefficients of
+    the form
+        1e-14 * nu**2
+    where nu could be symbolic.
+
+    Parameters
+    ----------
+    operator : SparsePauliOp
+        The operator.
+    tol : _type_, optional
+        Tolerance, by default 1e-10
+
+    Returns
+    -------
+    SparsePauliOp
+        The operator with small coefficients dropped.
+
+    Raises
+    ------
+    ValueError
+        _description_
+    """
     new_operator = 0 * operator
     for term in operator:
 
@@ -184,6 +209,10 @@ def drop_small_coeffs(operator: SparsePauliOp, tol=1e-10) -> SparsePauliOp:
 
 
 class BMNModel():
+    """
+    Class for simulating the mini-BMN model on a quantum computer.
+    Uses the truncated encoding of oscillators introduced in https://arxiv.org/pdf/2011.06573
+    """
     def __init__(self, gauge_group_degree: int, bits_per_oscillator: int):
         self.num_matrices = 3 # hard-code this for now
         self.gauge_group_degree = gauge_group_degree
@@ -267,7 +296,6 @@ class BMNModel():
 
         return operator.simplify()
 
-
     def annihilation_operator(self, matrix_idx: int, generator_idx: int) -> SparsePauliOp:
         """
         Build the annihilation operators for the oscillator.
@@ -285,7 +313,6 @@ class BMNModel():
             The creation operator.
         """
         return self.creation_operator(matrix_idx, generator_idx).adjoint()
-
 
     def position_operator(self, matrix_idx: int, generator_idx: int) -> SparsePauliOp:
         """
@@ -355,7 +382,6 @@ class BMNModel():
                     )
         return operator
 
-
     def hamiltonian_cubic_interaction(self, nu: Union[Parameter, float]) -> SparsePauliOp:
         """
         The cubic term in the Hamiltonian for the mini-BMN model,
@@ -383,7 +409,6 @@ class BMNModel():
                                 @ self.position_operator(2, c)
                                 )
         return operator * nu
-
 
     def hamiltonian_quartic_interaction(self) -> SparsePauliOp:
         """
@@ -421,7 +446,6 @@ class BMNModel():
                                             )
 
         return operator
-
 
     def hamiltonian(self, nu: Union[Parameter, float], free_only:bool=False) -> SparsePauliOp:
         """
