@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "bmnsim"
+version = "0.1.0"
+description = "BMN Project"
+authors = ["Gavin Hartnett <gshartnett@gmail.com>"]
+readme = "README.md"
+packages = [{include = "bmn"}]
+
+
+[tool.poetry.dependencies]
+python = ">=3.10, <3.13"
+
+
+[tool.black]
+exclude = '''
+(
+     /(
+         docs
+     )/
+)
+'''
+
+[tool.isort]
+profile = "black"
+force_grid_wrap = "2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

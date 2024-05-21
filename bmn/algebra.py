@@ -1,5 +1,4 @@
 import numpy as np
-import sympy as sp
 from typing import Union, Self
 from numbers import Number
 
@@ -29,7 +28,10 @@ class MatrixOperator:
         self.operators = list(self.data.keys())
         self.coeffs = list(self.data.values())
         self.degrees = [len(op) for op in self.operators]
-        self.max_degree = max(self.degrees)
+        if self.degrees == []:
+            self.degree = 0
+        else:
+            self.max_degree = max(self.degrees)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(operators={self.operators!r}, coeff={self.coeffs!r})"
@@ -93,6 +95,14 @@ class MatrixOperator:
             return self
         else:
             return self * self.__pow__(power - 1)
+
+    def __eq__(self, other: Self) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+        return self.data == other.data
+
+    def trace(self):
+        return SingleTraceOperator(data=self.data)
 
 
 class SingleTraceOperator(MatrixOperator):
