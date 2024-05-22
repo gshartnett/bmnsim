@@ -29,9 +29,13 @@ class MatrixOperator:
         self.coeffs = list(self.data.values())
         self.degrees = [len(op) for op in self.operators]
         if self.degrees == []:
-            self.degree = 0
+            self.max_degree = 0
         else:
             self.max_degree = max(self.degrees)
+
+    def __iter__(self):
+        for key, value in self.data.items():
+            yield key, value
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(operators={self.operators!r}, coeff={self.coeffs!r})"
@@ -44,11 +48,14 @@ class MatrixOperator:
                 x += " + "
         return x
 
+    def copy(self):
+        return self.__class__(data={k: v for k, v in self})
+
     def __add__(self, other: Self) -> Self:
         if not isinstance(other, self.__class__):
             raise ValueError(f"Cannot add {type(other)} and {self.__class__.__name__}")
         new_data = self.data.copy()
-        for op, coeff in other.data.items():
+        for op, coeff in other:
             new_data[op] = new_data.get(op, 0) + coeff
         return self.__class__(data=new_data)
 
@@ -58,13 +65,13 @@ class MatrixOperator:
                 f"Cannot subtract {type(other)} and {self.__class__.__name__}"
             )
         new_data = self.data.copy()
-        for op, coeff in other.data.items():
+        for op, coeff in other:
             new_data[op] = new_data.get(op, 0) - coeff
         return self.__class__(data=new_data)
 
     def __rmul__(self, other: Number):
         if isinstance(other, Number):
-            new_data = {op: other * coeff for op, coeff in self.data.items()}
+            new_data = {op: other * coeff for op, coeff in self}
             return self.__class__(data=new_data)
         else:
             raise ValueError("Warning, right multiplication only valid for numbers")
@@ -75,8 +82,8 @@ class MatrixOperator:
         if isinstance(other, Number):
             return self.__rmul__(other)
         new_data = {}
-        for op1, coeff1 in self.data.items():
-            for op2, coeff2 in other.data.items():
+        for op1, coeff1 in self:
+            for op2, coeff2 in other:
                 new_data[op1 + op2] = new_data.get(op1 + op2, 0) + coeff1 * coeff2
         return self.__class__(data=new_data)
 
@@ -99,15 +106,19 @@ class MatrixOperator:
     def __eq__(self, other: Self) -> bool:
         if not isinstance(other, type(self)):
             return False
-        return self.data == other.data
+        return self.data == {k: v for k, v in other}
+
+    def __len__(self) -> int:
+        return len(self.data)
 
     def trace(self):
-        return SingleTraceOperator(data=self.data)
+        return SingleTraceOperator(data={k: v for k, v in self})
 
 
 class SingleTraceOperator(MatrixOperator):
     """
     Single trace operator.
+    TODO consider adding an __iter__/making it a generator
     """
 
     def __str__(self) -> str:
@@ -118,6 +129,88 @@ class SingleTraceOperator(MatrixOperator):
                 x += " + "
         return x
 
+    def __mul__(self, other: Number):
+        if not isinstance(other, Number):
+            raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
+        if isinstance(other, Number):
+            return self.__rmul__(other)
+        '''
+        # loop over all terms
+        for op1, coeff1 in self.data.items():
+            for op2, coeff2 in self.data.items():
+
+        # special case when either self or other is proportional to identity
+        if self.max_degree == 0:
+            # zero operator
+            if self.coeffs == []:
+                return 0 * SingleTraceOperator(data = {k: v for k, v in other.data.items()})
+            return self.coeffs[0] * SingleTraceOperator(data = {k: v for k, v in other.data.items()})
+        if other.max_degree == 0:
+            if other.coeffs == []:
+                return 0 * SingleTraceOperator(data = {k: v for k, v in self.data.items()})
+            return other.coeffs[0] * SingleTraceOperator(data = {k: v for k, v in self.data.items()})
+
+        return DoubleTraceOperator(
+            op1=SingleTraceOperator(data={k: v for k, v in self.data.items()}),
+            op2=SingleTraceOperator(data={k: v for k, v in other.data.items()}),
+        )
+        '''
+
+    def hermitian_conjugate(self) -> Self:
+        # assumes operator basis is Hermitian
+        return self.__class__(
+            data={
+                op[::-1]: np.conjugate(coeff)
+                for op, coeff in self
+            }
+        )
+
+
+'''
+class DoubleTraceOperator:
+    def __init__(self, operator1: SingleTraceOperator, operator2: SingleTraceOperator):
+
+        # zero
+        if len(operator1) * len(operator2) == 0:
+            return SingleTraceOperator(data={():0})
+
+        #self.data = {}
+        #for op1, coeff1 in operator1.data.items():
+        #    for op2, coeff2 in operator2.data.items():
+        #        self.data[(op1, op2)] = coeff1 * coeff2
+        if not (len(op1) == 1 and len(op2) == 1):
+            raise ValueError("Each SingleTraceOperator must have deg <=1.")
+
+        self.coeff = op1.coeffs[0] * op2.coeffs[0]
+        self.op1 = op1.operators[0]
+        self.op2 = op2.operators[0]
+
+    def __repr__(self) -> str:
+         return f"{self.__class__.__name__}(op1={self.op1!r}, op2={self.op2!r}, coeff={self.coeff!r})"
+
+    def __str__(self) -> str:
+        x = "("
+        for idx, (coeff, op) in enumerate(
+            zip(self.data[0].coeffs, self.data[0].operators)
+        ):
+            x += f"{coeff}" + f" tr {op}"
+            if idx != len(self.data[0].operators) - 1:
+                x += " + "
+            else:
+                x += ")"
+
+        x += " * ("
+
+        for idx, (coeff, op) in enumerate(
+            zip(self.data[1].coeffs, self.data[1].operators)
+        ):
+            x += f"{coeff}" + f" tr {op}"
+            if idx != len(self.data[1].operators) - 1:
+                x += " + "
+            else:
+                x += ")"
+        return x
+'''
 
 class MatrixSystem:
     """
@@ -129,11 +222,11 @@ class MatrixSystem:
         self.commutation_rules = self.build_commutation_rules(commutation_rules_concise)
 
     def build_commutation_rules(self, commutation_rules_concise):
-        '''
+        """
         Expand the supplied concise commutation rules to cover all
         possibilities, i.e.
         [P1, X1], [X1, P1], [X2, P1], etc
-        '''
+        """
         commutation_rules = {}
         for op_str_1 in self.operator_basis:
             for op_str_2 in self.operator_basis:
@@ -163,14 +256,14 @@ class MatrixSystem:
         return commutation_rules
 
     def single_trace_commutator(
-        self, op1: SingleTraceOperator, op2: SingleTraceOperator
+        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator
     ) -> SingleTraceOperator:
-        '''
+        """
         Take the commutator of two single trace operators.
-        '''
+        """
         if not (
-            isinstance(op1, SingleTraceOperator)
-            and isinstance(op2, SingleTraceOperator)
+            isinstance(st_operator1, SingleTraceOperator)
+            and isinstance(st_operator2, SingleTraceOperator)
         ):
             raise ValueError("Arguments must be single trace operators.")
 
@@ -178,12 +271,12 @@ class MatrixSystem:
         new_data = {}
 
         # loop over the terms in each single trace operator
-        for op1_term, coeff1 in op1.data.items():
-            for op2_term, coeff2 in op2.data.items():
+        for op1, coeff1 in st_operator1:
+            for op2, coeff2 in st_operator2:
 
                 # loop over the variables in each term
-                for variable1_idx, variable1 in enumerate(op1_term):
-                    for variable2_idx, variable2 in enumerate(op2_term):
+                for variable1_idx, variable1 in enumerate(op1):
+                    for variable2_idx, variable2 in enumerate(op2):
 
                         # TODO revisit this relation to better understand it/derive it
                         new_coeff = (
@@ -192,10 +285,10 @@ class MatrixSystem:
                             * self.commutation_rules[(variable1, variable2)]
                         )
                         new_term = (
-                            op2_term[:variable2_idx]
-                            + op1_term[variable1_idx + 1 :]
-                            + op1_term[:variable1_idx]
-                            + op2_term[variable2_idx + 1 :]
+                            op2[:variable2_idx]
+                            + op1[variable1_idx + 1 :]
+                            + op1[:variable1_idx]
+                            + op2[variable2_idx + 1 :]
                         )
                         new_data[new_term] = new_data.get(new_term, 0) + new_coeff
 

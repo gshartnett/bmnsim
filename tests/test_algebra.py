@@ -32,3 +32,24 @@ def test_single_trace_commutator_onematrix():
     assert matrix_system.single_trace_commutator(OP1, OP2) == SingleTraceOperator(
         data={("P", "P"): 2j, ("X", "X"): -2j, ("X", "X", "X", "X"): -4 * 7j}
     )
+
+
+def test_zero_single_trace_operator():
+    '''
+    Test edge cases involving the zero operator
+    '''
+    zero = SingleTraceOperator(data={(): 0})
+
+    assert len(zero) == 0
+
+    # 0 * <tr(O)>
+    assert SingleTraceOperator(data={("P", "P"): 0}) == zero
+
+    # alpha * zero
+    #assert SingleTraceOperator(data={(): 3}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+
+    # 0 * zero
+    #assert SingleTraceOperator(data={(): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+
+    # zero * zero
+    #assert SingleTraceOperator(data={("X"): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
