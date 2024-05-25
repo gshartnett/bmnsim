@@ -156,16 +156,6 @@ class SingleTraceOperator(MatrixOperator):
         )
         '''
 
-    def hermitian_conjugate(self) -> Self:
-        # assumes operator basis is Hermitian
-        return self.__class__(
-            data={
-                op[::-1]: np.conjugate(coeff)
-                for op, coeff in self
-            }
-        )
-
-
 '''
 class DoubleTraceOperator:
     def __init__(self, operator1: SingleTraceOperator, operator2: SingleTraceOperator):
@@ -219,7 +209,26 @@ class MatrixSystem:
 
     def __init__(self, operator_basis: list[str], commutation_rules_concise: int):
         self.operator_basis = operator_basis
+        self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
         self.commutation_rules = self.build_commutation_rules(commutation_rules_concise)
+
+
+    def hermitian_conjugate(self, operator: MatrixOperator) -> Self:
+        # assumes operator basis is Hermitian or anti-Hermitian
+        data = {}
+        for op, coeff in operator:
+            reversed_op = op[::-1]
+            num_antihermitian = sum(1 * (not self.hermitian_dict[op_str]) for op_str in op) % 2
+            data[reversed_op] = (-1)**num_antihermitian * np.conjugate(coeff)
+        return operator.__class__(data=data)
+        '''
+        return self.__class__(
+            data={
+                op[::-1]: np.conjugate(coeff)
+                for op, coeff in self
+            }
+        )
+        '''
 
     def build_commutation_rules(self, commutation_rules_concise):
         """
