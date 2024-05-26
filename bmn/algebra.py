@@ -209,7 +209,9 @@ class MatrixSystem:
 
     def __init__(self, operator_basis: list[str], commutation_rules_concise: int):
         self.operator_basis = operator_basis
-        self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
+        print('Assuming all operators are hermitian!')
+        #self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
+        self.hermitian_dict = {op_str: True for op_str in self.operator_basis}
         self.commutation_rules = self.build_commutation_rules(commutation_rules_concise)
 
 
