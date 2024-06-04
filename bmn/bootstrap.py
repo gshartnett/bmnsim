@@ -4,6 +4,7 @@ from typing import Union
 import numpy as np
 from scipy.sparse import coo_matrix
 from scipy.sparse import csr_matrix
+from collections import Counter
 
 from bmn.algebra import (
     MatrixOperator,
@@ -14,6 +15,36 @@ from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space,
 )
+
+def is_purely_real(number):
+    """
+    Check if a number is purely real.
+
+    Args:
+    number (complex or real): The number to check.
+
+    Returns:
+    bool: True if the number is purely real, False otherwise.
+    """
+    if isinstance(number, (int, float)):
+        return True  # Real numbers (int, float) are purely real
+    elif isinstance(number, complex):
+        return number.imag == 0  # Complex number with zero imaginary part is purely real
+    return False  # Other types are not considered here
+
+def is_purely_imaginary(number):
+    """
+    Check if a number is purely imaginary.
+
+    Args:
+    number (complex): The number to check.
+
+    Returns:
+    bool: True if the number is purely imaginary, False otherwise.
+    """
+    if isinstance(number, complex):
+        return number.real == 0  # Complex number with zero real part is purely imaginary
+    return False  # Other types cannot be purely imaginary
 
 
 class BootstrapSystem:
@@ -41,6 +72,49 @@ class BootstrapSystem:
             )
         self.param_dim = len(self.operator_dict)
         self.tol = tol
+        self.null_space_matrix = None
+        self._validate()
+
+    def _validate(self):
+        """
+        Check that the operator basis used in matrix_system is consistent with gauge and hamiltonian.
+        """
+        self.validate_operator(operator=self.gauge)
+        self.validate_operator(operator=self.hamiltonian)
+
+    def validate_operator(self, operator: MatrixOperator):
+        """
+        Check that the operator only contains terms used in the matrix_system.
+        """
+        for op, coeff in operator:
+            for op_str in op:
+                if not (op_str in self.matrix_system.operator_basis):
+                    raise ValueError(f"Invalid operator: constrains term {op_str} which is not in operator_basis.")
+
+    def get_null_space_matrix(self) -> np.ndarray:
+        """
+        Retrieves the null space matrix, K_{ia}, building it if necessary.
+        Note that K_{ia} K_{ib} = delta_{ab}.
+
+        Returns
+        -------
+        np.ndarray
+            The null space matrix K_{ia}.
+        """
+        if self.null_space_matrix is not None:
+            return self.null_space_matrix
+        else:
+            print("Null matrix has not been computed yet. Building it by solving the linear constraints.")
+            linear_constraint_matrix = self.build_linear_constraints().todense()
+            null_space_matrix = get_null_space(linear_constraint_matrix)
+
+            #print(f"replacing null space matrix with identity for debugging purposes!")
+            #self.null_space_matrix = np.eye(self.param_dim)
+
+            self.null_space_matrix = null_space_matrix
+
+            self.param_dim_null = self.null_space_matrix.shape[1]
+            return null_space_matrix
 
     def generate_operators(self, max_degree: int) -> list[str]:
         """
@@ -70,11 +144,12 @@ class BootstrapSystem:
         return [x for xs in operators.values() for x in xs]  # flatten
 
     def single_trace_to_coefficient_vector(
-        self, st_operator: SingleTraceOperator, return_null_basis: bool=False
+        self, st_operator: SingleTraceOperator, return_null_basis: bool = False
     ) -> np.ndarray:
         """
         TODO make sparse compatible
-        Map a single trace operator to a vector of the coefficients.
+        Map a single trace operator to a vector of the coefficients, v_i.
+        Optionally returns the vector in the null basis, u_a = v_i K_{ia}
 
         Parameters
         ----------
@@ -82,7 +157,7 @@ class BootstrapSystem:
             The operator
 
         return_null_basis : bool, optional
-            Controls whether the flag is returned in the original basis or the null basis.
+            Controls whether the vector is returned in the original basis or the null basis.
             By default False.
 
         Returns
@@ -90,13 +165,18 @@ class BootstrapSystem:
         np.ndarray
             The vector.
         """
+        # validate
+        self.validate_operator(operator=st_operator)
+
+        null_space_matrix = self.get_null_space_matrix()
+
         vec = [0] * self.param_dim
         for op, coeff in st_operator:
             idx = self.operator_dict[op]
             vec[idx] = coeff
         if not return_null_basis:
             return np.asarray(vec)
-        return np.asarray(vec) @ self.null_space_matrix
+        return np.asarray(vec) @ null_space_matrix
 
     def generate_hamiltonian_constraints(self) -> list[SingleTraceOperator]:
         """
@@ -136,7 +216,7 @@ class BootstrapSystem:
     def generate_reality_constraints(self) -> list[SingleTraceOperator]:
         """
         Generate single trace constraints imposed by reality,
-            <O^dagger> = <O>
+            <O^dagger> = <O>*
 
         Returns
         -------
@@ -149,8 +229,16 @@ class BootstrapSystem:
             st_operator_dagger = self.matrix_system.hermitian_conjugate(
                 operator=SingleTraceOperator(data={op: 1})
             )
+
             if len(st_operator - st_operator_dagger) > 0:
-                constraints.append(st_operator - st_operator_dagger)
+
+                # case 1: <O> is real: <O^dagger> = <O>
+                # case 2: <O> is imaginary: <O^dagger> = -<O>
+                # TODO how to generalize this?
+                #num_momentum_ops = len([op for op_str in op if op_str == 'P'])
+                #sign = (-1)**num_momentum_ops
+                sign = 1
+                constraints.append(st_operator - sign * st_operator_dagger)
         return self.clean_constraints(constraints)
 
     def generate_cyclic_constraints(self) -> list[SingleTraceOperator]:
@@ -215,19 +303,25 @@ class BootstrapSystem:
         constraints = []
 
         # Hamiltonian constraints
-        for st_operator in self.generate_hamiltonian_constraints():
+        hamiltonian_constraints = self.generate_hamiltonian_constraints()
+        print(f"generated {len(hamiltonian_constraints)} Hamiltonian constraints")
+        for st_operator in hamiltonian_constraints:
             if st_operator != empty_operator:
                 constraints.append({op: coeff for op, coeff in st_operator})
 
         # gauge constraints
-        for st_operator in self.generate_gauge_constraints():
+        gauge_constraints = self.generate_gauge_constraints()
+        print(f"generated {len(gauge_constraints)} gauge constraints")
+        for st_operator in gauge_constraints:
             if st_operator != empty_operator:
                 constraints.append({op: coeff for op, coeff in st_operator})
 
         # reality constraints
-        #for st_operator in self.generate_reality_constraints():
-        #    if st_operator != empty_operator:
-        #        constraints.append({op: coeff for op, coeff in st_operator})
+        reality_constraints = self.generate_reality_constraints()
+        print(f"generated {len(reality_constraints)} reality constraints")
+        for st_operator in reality_constraints:
+            if st_operator != empty_operator:
+                constraints.append({op: coeff for op, coeff in st_operator})
 
         # optionally return the constraints in a human-readable form
         if not return_matrix:
@@ -244,29 +338,31 @@ class BootstrapSystem:
             matrix_shape=(len(constraints), len(self.operator_list)),
         )
 
-    def build_quadratic_constraints(self, null_space_matrix):
+    def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
         """
-        TODO return type
         TODO remove linearly dependent constraints
         Build the quadratic constraints. The quadratic constraints are exclusively due to
         the cyclic constraints. The constraints can be written as
 
-        A_{ijk} v_j v_k + B_{ij} v_j = 0.
+        A_{Iij} v_i v_j + B_{Ii} v_i = 0.
 
         After imposing the linear constraints by transforming to the null basis, these become
 
-        A'_{iab} u_a u_b + B'_{ia} u_a = 0,
+        A'_{Iab} u_a u_b + B'_{Ia} u_a = 0,
 
-        where A'_{iab} = M_{ijk} K_{ja} K_{kb}, B'_{ia} = B_{ij} K_{ja}
+        where A'_{Iab} = A_{Iij} K_{ia} K_{jb}, B'_{Ia} = B_{Ii} K_{ia}
 
         Returns
         -------
-        _type_
-            _description_
+        dict[str, np.nparray]
+            The constraint arrays, contained in a dictionary like so
+            {'quadratic': A, 'linear': B}
         """
 
         empty_operator = SingleTraceOperator(data={(): 0})
         constraints = self.generate_cyclic_constraints()
+
+        null_space_matrix = self.get_null_space_matrix()
 
         linear_terms = []
         quadratic_terms = []
@@ -311,8 +407,6 @@ class BootstrapSystem:
                     quadratic_matrix,
                     null_space_matrix,
                 )
-                # quadratic_constraint_vector_1 = np.dot(quadratic_constraint_vector_1, null_space_matrix)
-                # quadratic_constraint_vector_2 = np.dot(quadratic_constraint_vector_2, null_space_matrix)
 
                 # record
                 if (np.max(np.abs(linear_constraint_vector)) > self.tol) and (
@@ -321,13 +415,18 @@ class BootstrapSystem:
                     linear_terms.append(linear_constraint_vector)
                     quadratic_terms.append(quadratic_matrix)
 
-        return {"linear": np.asarray(linear_terms), "quadratic": np.asarray(quadratic_terms)}
+        return {
+            "linear": np.asarray(linear_terms),
+            "quadratic": np.asarray(quadratic_terms),
+        }
 
     def clean_constraints(
         self, constraints: list[SingleTraceOperator]
     ) -> list[SingleTraceOperator]:
         """
-        Remove constraints that involve operators outside the basis set.
+        Remove constraints that involve operators outside the operator list.
+        TODO If the constraint involves only imaginary coefficients, multiply
+        by i to make the constraint real.
 
         Parameters
         ----------
@@ -341,11 +440,25 @@ class BootstrapSystem:
         """
         cleaned_constraints = []
         for st_operator in constraints:
+
+            '''
+            # convert all constraints to be purely real
+            if all([is_purely_real(coeff) for op, coeff in st_operator]):
+                st_operator_real = SingleTraceOperator(data={op: np.real(coeff) for op, coeff in st_operator})
+                #cleaned_constraints.append(st_operator)
+            elif all([is_purely_imaginary(coeff) for op, coeff in st_operator]):
+                #cleaned_constraints.append(SingleTraceOperator(data={op: np.real(1j*coeff) for op, coeff in st_operator}))
+                st_operator_real = SingleTraceOperator(data={op: np.real(1j * coeff) for op, coeff in st_operator})
+            else:
+                raise ValueError(f"All linear constraints should be purely real or purely imaginary. This condition has been violated for op = {st_operator}.")
+            '''
+
+            # check that operator only contains terms in the operator_list
             if all([op in self.operator_list for op in st_operator.data]):
                 cleaned_constraints.append(st_operator)
         return cleaned_constraints
 
-    def build_bootstrap_table(self, null_space_matrix) -> None:
+    def build_bootstrap_table(self) -> None:
         """
         TODO figure out return type
 
@@ -405,17 +518,43 @@ class BootstrapSystem:
         X
             X
         """
+        null_space_matrix = self.get_null_space_matrix()
+
         bootstrap_dict = {}
         for idx1, op_str1 in enumerate(self.operator_list[: self.psd_matrix_dim]):
+            op_str1 = op_str1[::-1] # take the h.c. by reversing the elements
             for idx2, op_str2 in enumerate(self.operator_list[: self.psd_matrix_dim]):
+
+                num_momentum_ops = Counter(op_str1).get('Pi', 0)
+                sign = (-1)**num_momentum_ops
+
                 index_map = self.operator_dict[op_str1 + op_str2]
                 for k in range(null_space_matrix.shape[1]):
-                    x = null_space_matrix[index_map, k]
+                    x = sign * null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
+                        #print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
-        return bootstrap_dict
 
-    def build_optimization_problem(self):
+        #print('Returning bootstrap_dict for debugging')
+        #return bootstrap_dict
+
+        # map to a sparse array
+        bootstrap_array = np.zeros(
+            (self.psd_matrix_dim, self.psd_matrix_dim, self.param_dim_null)
+        )
+        for (i, j, k), value in bootstrap_dict.items():
+            bootstrap_array[i, j, k] = value
+        bootstrap_array_sparse = csr_matrix(
+            bootstrap_array.reshape(
+                bootstrap_array.shape[0] * bootstrap_array.shape[1],
+                bootstrap_array.shape[2],
+            )
+        )
+
+        return bootstrap_array_sparse
+
+    """
+    def XXXXbuild_optimization_problem(self):
         linear_constraint_matrix = self.build_linear_constraints().todense()
         null_space_matrix = get_null_space(linear_constraint_matrix)
 
@@ -431,7 +570,7 @@ class BootstrapSystem:
         bootstrap_array = np.zeros((self.psd_matrix_dim, self.psd_matrix_dim, self.param_dim_null))
         for (i, j, k), value in bootstrap_dict.items():
             bootstrap_array[i,j,k] = value
-
         bootstrap_array_sparse = csr_matrix(bootstrap_array.reshape(bootstrap_array.shape[0] * bootstrap_array.shape[1], bootstrap_array.shape[2]))
 
         return bootstrap_array_sparse, quadratic_constraints
+    """

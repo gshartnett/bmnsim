@@ -207,11 +207,15 @@ class MatrixSystem:
     Class for doing algebra.
     """
 
-    def __init__(self, operator_basis: list[str], commutation_rules_concise: int):
+    def __init__(self, operator_basis: list[str], commutation_rules_concise: int, hermitian_dict: dict[str, str]):
         self.operator_basis = operator_basis
-        print('Assuming all operators are hermitian!')
+
+        print('Assuming all operators are either Hermitian or anti-Hermitna.')
         #self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
-        self.hermitian_dict = {op_str: True for op_str in self.operator_basis}
+        #self.hermitian_dict = {op_str: True for op_str in self.operator_basis}
+        self.hermitian_dict = hermitian_dict
+        if set(hermitian_dict.keys()) != set(operator_basis):
+            raise ValueError("Warning, keys of hermitian_dict must match operator_basis elements.")
         self.commutation_rules = self.build_commutation_rules(commutation_rules_concise)
 
 
@@ -220,7 +224,7 @@ class MatrixSystem:
         data = {}
         for op, coeff in operator:
             reversed_op = op[::-1]
-            num_antihermitian = sum(1 * (not self.hermitian_dict[op_str]) for op_str in op) % 2
+            num_antihermitian = sum(1 * (not self.hermitian_dict[op_str]) for op_str in op)
             data[reversed_op] = (-1)**num_antihermitian * np.conjugate(coeff)
         return operator.__class__(data=data)
         '''

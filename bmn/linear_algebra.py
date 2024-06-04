@@ -3,6 +3,7 @@ from numbers import Number
 import numpy as np
 from scipy.linalg import null_space
 from scipy.sparse import coo_matrix
+from scipy.linalg import svd
 
 
 def create_sparse_matrix_from_dict(
@@ -84,3 +85,34 @@ def get_null_space(matrix: np.matrix, tol: float = 1e-10) -> np.ndarray:
     if not np.max(np.abs(verification_result)) <= tol:
         raise ValueError("Warning, null space condition not satisfied.")
     return null_space_matrix
+
+
+def get_row_space(matrix: np.ndarray, tol: float = 1e-10) -> np.ndarray:
+
+    # perform SVD on the matrix
+    U, S, Vt = svd(matrix)
+
+    # determine rank of matrix
+    rank = np.sum(
+        S > tol
+    )  # Consider singular values greater than a small threshold as non-zero
+
+    # extract basis of the row space from the top rank rows of Vt
+    row_space_basis = Vt[:rank, :]
+
+    return row_space_basis
+
+
+def is_in_row_space(matrix: np.ndarray, vector: np.ndarray) -> bool:
+    if matrix.shape[1] != len(vector):
+        raise ValueError("Error, dimension mismatch.")
+    row_space_matrix = get_row_space(matrix)
+
+    # Project the vector v onto the row space
+    # Solve the linear system row_space_basis.T * c = v to find the coefficients c
+    c, residuals, rank, s = np.linalg.lstsq(row_space_matrix.T, vector, rcond=None)
+
+    # Reconstruct v from the row space basis using the coefficients c
+    v_projected = row_space_matrix.T @ c
+
+    return np.allclose(v_projected, vector)
