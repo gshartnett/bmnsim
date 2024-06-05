@@ -45,6 +45,7 @@ acknowledge https://github.com/gshartnett/matrix-bootstrap/blob/main/solver.py
 
 
 def debug(x):
+    # TODO remove this - hold over from Han et al
     print(x)
 
 
@@ -52,17 +53,26 @@ def compute_L2_norm_of_linear_constraints(A, b, param):
     return sum(np.square(A @ param - b))
 
 
-def compute_L2_norm_of_quadratic_constraints(bootstrap, param):
-    quadratic_constraints = bootstrap.build_quadratic_constraints()
-    constraints = quadratic_constraints['linear'] @ param + np.einsum('Iij, i, j -> I', quadratic_constraints['quadratic'], param, param)
+def compute_L2_norm_of_quadratic_constraints(quadratic_constraints, param):
+    # quadratic_constraints = bootstrap.build_quadratic_constraints()
+    constraints = quadratic_constraints["linear"] @ param + np.einsum(
+        "Iij, i, j -> I", quadratic_constraints["quadratic"], param, param
+    )
     return np.sum(np.square(constraints))
+
 
 def minimal_eigval(bootstrap_array_sparse, parameter_vector_null):
     dim = int(np.sqrt(bootstrap_array_sparse.shape[0]))
-    tables_val = np.reshape(
+    bootstrap_matrix = np.reshape(
         bootstrap_array_sparse.dot(parameter_vector_null), (dim, dim)
     )
-    return scipy.linalg.eigvalsh(tables_val)[0]
+
+    if not np.allclose(
+        (bootstrap_matrix - bootstrap_matrix.T), np.zeros_like(bootstrap_matrix)
+    ):
+        raise ValueError("Bootstrap matrix is not symmetric.")
+
+    return scipy.linalg.eigvalsh(bootstrap_matrix)[0]
 
 
 def sdp_init(
@@ -267,7 +277,7 @@ def get_quadratic_constraint_vector(
 def minimize(
     bootstrap,
     op,
-    init,
+    #init,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
     eps=5e-4,
@@ -297,6 +307,7 @@ def minimize(
     linear_constraint_matrix = bootstrap.build_linear_constraints().tocsr()
     quadratic_constraints = bootstrap.build_quadratic_constraints()
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
+    init = np.random.normal(size=bootstrap.param_dim_null)
 
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
 
@@ -351,8 +362,12 @@ def minimize(
             eps=1e-4,
             verbose=True,
         )
-        linear_constraint_norm = compute_L2_norm_of_linear_constraints(A=A_op, b=b_op, param=param)
-        quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(bootstrap=bootstrap, param=param)
+        linear_constraint_norm = compute_L2_norm_of_linear_constraints(
+            A=A_op, b=b_op, param=param
+        )
+        quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(
+            quadratic_constraints=quadratic_constraints, param=param
+        )
         print(f"SDP INIT, ||A x - b||_2 = {linear_constraint_norm}")
         print(f"SDP INIT, ||quadratic constraint||_2 = {quadratic_constraint_norm}")
         radius = np.linalg.norm(param) + 20
@@ -381,8 +396,12 @@ def minimize(
             eps=1e-4,
             verbose=True,
         )
-        linear_constraint_norm = compute_L2_norm_of_linear_constraints(A=A_op, b=b_op, param=param)
-        quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(bootstrap=bootstrap, param=param)
+        linear_constraint_norm = compute_L2_norm_of_linear_constraints(
+            A=A_op, b=b_op, param=param
+        )
+        quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(
+            quadratic_constraints=quadratic_constraints, param=param
+        )
         print(f"SDP INIT, ||A x - b||_2 = {linear_constraint_norm}")
         print(f"SDP INIT, ||quadratic constraint||_2 = {quadratic_constraint_norm}")
         print("finish sdp_relax")

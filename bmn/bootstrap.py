@@ -349,7 +349,7 @@ class BootstrapSystem:
             matrix_shape=(len(constraints), len(self.operator_list)),
         )
 
-    def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
+    def build_quadratic_constraints(self, impose_linear_constraints=True) -> dict[str, np.ndarray]:
         """
         Build the quadratic constraints. The quadratic constraints are exclusively due to
         the cyclic constraints. The constraints can be written as
@@ -378,6 +378,7 @@ class BootstrapSystem:
         quadratic_terms = []
 
         # loop over constraints
+        counter = 0
         for constraint_idx, (operator_idx, term) in enumerate(constraints.items()):
 
             # check that either both LHS and RHS are trivial, or neither are
@@ -422,32 +423,47 @@ class BootstrapSystem:
                             quadratic_constraint_vector_2, quadratic_constraint_vector_1
                         )
 
-                # transform to null basis
-                linear_constraint_vector = np.dot(
-                    linear_constraint_vector, null_space_matrix
-                )
-                quadratic_matrix = np.einsum(
-                    "ia, ij, jb->ab",
-                    null_space_matrix,
-                    quadratic_matrix,
-                    null_space_matrix,
-                )
+                # TODO remove this
+                if impose_linear_constraints:
+                    # transform to null basis
+                    linear_constraint_vector = np.dot(
+                        linear_constraint_vector, null_space_matrix
+                    )
+                    quadratic_matrix = np.einsum(
+                        "ia, ij, jb->ab",
+                        null_space_matrix,
+                        quadratic_matrix,
+                        null_space_matrix,
+                    )
+                else:
+                    print("Note: not imposing linear constraints by transforming to Null basis.")
 
                 linear_is_zero = (np.max(np.abs(linear_constraint_vector)) < self.tol)
                 quadratic_is_zero = (np.max(np.abs(quadratic_matrix)) < self.tol)
 
                 if (not quadratic_is_zero) and (not linear_is_zero):
+                    #print(f"constraint {counter} corresponds to operator_idx {operator_idx}, op = {self.operator_list[operator_idx]}")
                     linear_terms.append(linear_constraint_vector)
                     quadratic_terms.append(quadratic_matrix)
+                    counter += 1
 
                 if quadratic_is_zero and not linear_is_zero:
                     print(f"constraint from operator_idx = {operator_idx} is quadratically trivial.")
                 elif not quadratic_is_zero and linear_is_zero:
                     print(f"constraint operator_idx = {operator_idx} is linearly trivial.")
 
+        # map to numpy arrays
+        # THE MINUS SIGN IS VERY IMPORTANT: (-RHS + LHS = 0)
+        quadratic_terms = -np.asarray(quadratic_terms)
+        linear_terms = np.asarray(linear_terms)
+
+        # check that the quadratic matrix is symmetric
+        if not np.allclose(quadratic_terms, np.einsum('Iab->Iba', quadratic_terms)):
+            raise ValueError("Quadratic matrix not symmetric.")
+
         return {
-            "linear": np.asarray(linear_terms),
-            "quadratic": np.asarray(quadratic_terms),
+            "linear": linear_terms,
+            "quadratic": quadratic_terms,
         }
 
     def clean_constraints(
