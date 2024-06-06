@@ -8,8 +8,8 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
 
-g = 1.4
-L = 2
+g = 0.01
+L = 3
 
 matrix_system = MatrixSystem(
     # operator_basis=['X', 'P'],
@@ -33,7 +33,7 @@ hamiltonian = SingleTraceOperator(
 gauge = MatrixOperator(data={("X", "Pi"): 1, ("Pi", "X"): -1, (): 1})
 
 bootstrap = BootstrapSystem(
-    matrix_system=matrix_system, hamiltonian=hamiltonian, gauge=gauge, half_max_degree=L
+    matrix_system=matrix_system, hamiltonian=hamiltonian, gauge=gauge, half_max_degree=L, odd_degree_vanish=False,
 )
 
 bootstrap.get_null_space_matrix()
@@ -43,13 +43,18 @@ disable_debug()
 param, success = minimize(
     bootstrap=bootstrap,
     op=bootstrap.hamiltonian,
-    #init=1 * np.random.normal(size=bootstrap.param_dim_null),
+    init_scale = 10.0,
     verbose=False,
     maxiters=25,
     reg=5e-4,
     eps=5e-4,
 )
+
+for op in bootstrap.operator_list:
+    vec = bootstrap.single_trace_to_coefficient_vector(st_operator=SingleTraceOperator(data={op: 1}), return_null_basis=True)
+    op_expectation_value = vec @ param
+    print(f"op = {op}, EV = {op_expectation_value}")
+
 vec = bootstrap.single_trace_to_coefficient_vector(st_operator=hamiltonian, return_null_basis=True)
 energy = vec @ param
-
 print(f"problem success: {success}, min energy: {energy}")

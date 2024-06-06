@@ -271,6 +271,7 @@ def minimize(
     bootstrap,
     op,
     #init=None,
+    init_scale = 1.0,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
     eps=5e-4,
@@ -301,9 +302,11 @@ def minimize(
     quadratic_constraints = bootstrap.build_quadratic_constraints()
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
 
-    # init = np.random.normal(size=bootstrap.param_dim_null)
-    init = np.zeros(bootstrap.param_dim_null)
+    # initial parameter vector
+    init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
+    init = bootstrap.scale_param_to_enforce_normalization(init) # rescale to normalize
 
+    # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
 
     # the loss function to minimize, i.e., the value of op
