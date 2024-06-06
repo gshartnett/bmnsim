@@ -1,9 +1,11 @@
 from numbers import Number
 
 import numpy as np
-from scipy.linalg import null_space
+from scipy.linalg import (
+    null_space,
+    svd,
+)
 from scipy.sparse import coo_matrix
-from scipy.linalg import svd
 
 
 def create_sparse_matrix_from_dict(

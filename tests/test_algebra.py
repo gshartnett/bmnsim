@@ -1,14 +1,18 @@
-from bmn.algebra import MatrixSystem, SingleTraceOperator, MatrixOperator
+from bmn.algebra import (
+    MatrixOperator,
+    MatrixSystem,
+    SingleTraceOperator,
+)
 
 
 def test_instantiate_single_trace_operator():
-    '''
+    """
     Make sure that the single trace operator instantiation is
     insensitive to whether the input is a tuple or a string
     for the special case of a degree 1 term.
-    '''
-    op1 = MatrixOperator(data={'P2': 0.5})
-    op2 = MatrixOperator(data={('P2',): 0.5})
+    """
+    op1 = MatrixOperator(data={"P2": 0.5})
+    op2 = MatrixOperator(data={("P2",): 0.5})
     assert op1 == op2
 
 
@@ -35,9 +39,9 @@ def test_single_trace_commutator_onematrix():
 
 
 def test_zero_single_trace_operator():
-    '''
+    """
     Test edge cases involving the zero operator
-    '''
+    """
     zero = SingleTraceOperator(data={(): 0})
 
     assert len(zero) == 0
@@ -46,10 +50,10 @@ def test_zero_single_trace_operator():
     assert SingleTraceOperator(data={("P", "P"): 0}) == zero
 
     # alpha * zero
-    #assert SingleTraceOperator(data={(): 3}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+    # assert SingleTraceOperator(data={(): 3}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
 
     # 0 * zero
-    #assert SingleTraceOperator(data={(): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+    # assert SingleTraceOperator(data={(): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
 
     # zero * zero
-    #assert SingleTraceOperator(data={("X"): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+    # assert SingleTraceOperator(data={("X"): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero

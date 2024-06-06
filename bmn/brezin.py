@@ -163,6 +163,10 @@ def compute_Brezin_energy(g: float) -> float:
     return energy_integral(eps=sol.root, g=g)
 
 
+def compute_Brezin_energy_Han_conventions(g: float) -> float:
+    return 2 * compute_Brezin_energy(g / 2)
+
+
 if __name__ == "__main__":
 
     # compare against Table 3 in Brezin et al
@@ -175,7 +179,9 @@ if __name__ == "__main__":
         # 1000: 5.915, # for this extreme value the code fails
     }
 
-    print("Compare the values listed in Table 3 of Brezin et al against the values computed using this code:")
+    print(
+        "Compare the values listed in Table 3 of Brezin et al against the values computed using this code:"
+    )
     for g, table_val in table_values.items():
         computed_val = compute_Brezin_energy(g)
         error = np.abs(computed_val - table_val)

@@ -31,6 +31,7 @@ from bmn.algebra import (
     SingleTraceOperator,
 )
 from bmn.bootstrap import BootstrapSystem
+from bmn.debug_utils import debug
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space,
@@ -42,11 +43,6 @@ add Typing
 clean up variable names
 acknowledge https://github.com/gshartnett/matrix-bootstrap/blob/main/solver.py
 """
-
-
-def debug(x):
-    # TODO remove this - hold over from Han et al
-    print(x)
 
 
 def compute_L2_norm_of_linear_constraints(A, b, param):
@@ -111,8 +107,7 @@ def sdp_init(
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
 
     if str(prob.status) != "optimal":
-        print("WARNING!")
-        # debug("WARNING: sdp_init unexpected status: " + prob.status)
+        debug("WARNING: sdp_init unexpected status: " + prob.status)
 
     return param.value
 
@@ -153,8 +148,7 @@ def sdp_relax(
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
 
     if str(prob.status) != "optimal":
-        # debug("WARNING: sdp_relax unexpected status: " + prob.status)
-        print("WARNING!")
+        debug("WARNING: sdp_relax unexpected status: " + prob.status)
 
     return param.value
 
@@ -212,9 +206,8 @@ def sdp_minimize(
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
 
     if str(prob.status) != "optimal":
-        # debug("WARNING: sdp_minimize unexpected status: " + prob.status)
-        print("WARNING!")
-    return param.value
+        debug("WARNING: sdp_minimize unexpected status: " + prob.status)
+    return param.value, prob.status, prob.value
 
 
 def get_quadratic_constraint_vector(
@@ -277,7 +270,7 @@ def get_quadratic_constraint_vector(
 def minimize(
     bootstrap,
     op,
-    #init,
+    init=None,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
     eps=5e-4,
@@ -307,7 +300,10 @@ def minimize(
     linear_constraint_matrix = bootstrap.build_linear_constraints().tocsr()
     quadratic_constraints = bootstrap.build_quadratic_constraints()
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
-    init = np.random.normal(size=bootstrap.param_dim_null)
+
+    if init is None:
+        # init = np.random.normal(size=bootstrap.param_dim_null)
+        init = np.zeros(bootstrap.param_dim_null)
 
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
 
@@ -334,7 +330,6 @@ def minimize(
     # initialize parameters from file or from scratch
     last_param = None
     if savefile and os.path.isfile(savefile + ".npz"):
-        print("starting with savefile and path")
         npzfile = np.load(savefile + ".npz")
         radius, obs = npzfile["radius"], npzfile["obs"]
         param = lsqr(linear_constraint_matrix, obs)[0]
@@ -349,7 +344,6 @@ def minimize(
         )
         debug("Data read successfully")
     else:
-        print("starting from scartch")
         debug("Starting from scratch...")
         # find an initial parameter close to init that makes all bootstrap matrices positive
         param = sdp_init(
@@ -357,10 +351,7 @@ def minimize(
             A=A_op,
             b=b_op,
             init=init,
-            reg=reg,
-            maxiters=5_000,
-            eps=1e-4,
-            verbose=True,
+            verbose=verbose,
         )
         linear_constraint_norm = compute_L2_norm_of_linear_constraints(
             A=A_op, b=b_op, param=param
@@ -368,15 +359,12 @@ def minimize(
         quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(
             quadratic_constraints=quadratic_constraints, param=param
         )
-        print(f"SDP INIT, ||A x - b||_2 = {linear_constraint_norm}")
-        print(f"SDP INIT, ||quadratic constraint||_2 = {quadratic_constraint_norm}")
         radius = np.linalg.norm(param) + 20
 
     # penalty parameter for violation of constraints
     mu = 1
     # optimization steps
     for step in range(maxiters):
-        print(f"step = {step}")
         # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
         val, grad = get_quadratic_constraint_vector(
             quadratic_constraints, param, compute_grad=True
@@ -385,16 +373,13 @@ def minimize(
         b = np.append(b_op, grad.dot(param) - val)
 
         # one step
-        print("start sdp_relax")
         relaxed_param = sdp_relax(
             bootstrap_array_sparse=bootstrap_array_sparse,
             A=A,
             b=b,
             init=param,
             radius=radius,
-            maxiters=10_000,
-            eps=1e-4,
-            verbose=True,
+            verbose=verbose,
         )
         linear_constraint_norm = compute_L2_norm_of_linear_constraints(
             A=A_op, b=b_op, param=param
@@ -402,11 +387,7 @@ def minimize(
         quadratic_constraint_norm = compute_L2_norm_of_quadratic_constraints(
             quadratic_constraints=quadratic_constraints, param=param
         )
-        print(f"SDP INIT, ||A x - b||_2 = {linear_constraint_norm}")
-        print(f"SDP INIT, ||quadratic constraint||_2 = {quadratic_constraint_norm}")
-        print("finish sdp_relax")
-        print("start sdp_minimize")
-        new_param = sdp_minimize(
+        new_param, prob_status, prob_value = sdp_minimize(
             vec,
             bootstrap_array_sparse,
             A,
@@ -414,7 +395,7 @@ def minimize(
             param,
             radius,
             reg=reg,
-            verbose=True,
+            verbose=verbose,
         )
         if new_param is None:
             # wrongly infeasible
@@ -423,9 +404,7 @@ def minimize(
         # check progress
         cons_val = A.dot(param) - b
         maxcv = np.max(np.abs(cons_val))  # maximal constraint violation
-        print("start minimal_eigval")
         min_eig = minimal_eigval(bootstrap_array_sparse, param)
-        print("finish minimal_eigval")
         if verbose:
             print(
                 "Step {}: \tloss = {:.5f}, maxcv = {:.5f}, radius = {:.3f}, min_eig = {:+.5f}".format(
@@ -446,7 +425,7 @@ def minimize(
         ):
             if verbose:
                 print("Accuracy goal achieved.")
-            return param
+            return param, True
         # compute the changes in the merit function and decide whether the step should be accepted
         dloss = (
             loss(new_param)
@@ -494,10 +473,9 @@ def minimize(
         else:
             # reject
             radius = 0.8 * np.linalg.norm(new_param - param)
-    # debug("WARNING: minimize did not converge to precision {:.5f} within {} steps.".format(eps, maxiters))
-    print(
+    debug(
         "WARNING: minimize did not converge to precision {:.5f} within {} steps.".format(
             eps, maxiters
         )
     )
-    return param
+    return param, False

@@ -1,6 +1,10 @@
-import numpy as np
-from typing import Union, Self
 from numbers import Number
+from typing import (
+    Self,
+    Union,
+)
+
+import numpy as np
 
 
 class MatrixOperator:
@@ -134,7 +138,7 @@ class SingleTraceOperator(MatrixOperator):
             raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
         if isinstance(other, Number):
             return self.__rmul__(other)
-        '''
+        """
         # loop over all terms
         for op1, coeff1 in self.data.items():
             for op2, coeff2 in self.data.items():
@@ -154,9 +158,10 @@ class SingleTraceOperator(MatrixOperator):
             op1=SingleTraceOperator(data={k: v for k, v in self.data.items()}),
             op2=SingleTraceOperator(data={k: v for k, v in other.data.items()}),
         )
-        '''
+        """
 
-'''
+
+"""
 class DoubleTraceOperator:
     def __init__(self, operator1: SingleTraceOperator, operator2: SingleTraceOperator):
 
@@ -200,41 +205,50 @@ class DoubleTraceOperator:
             else:
                 x += ")"
         return x
-'''
+"""
+
 
 class MatrixSystem:
     """
     Class for doing algebra.
     """
 
-    def __init__(self, operator_basis: list[str], commutation_rules_concise: int, hermitian_dict: dict[str, str]):
+    def __init__(
+        self,
+        operator_basis: list[str],
+        commutation_rules_concise: int,
+        hermitian_dict: dict[str, str],
+    ):
         self.operator_basis = operator_basis
 
-        print('Assuming all operators are either Hermitian or anti-Hermitna.')
-        #self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
-        #self.hermitian_dict = {op_str: True for op_str in self.operator_basis}
+        print("Assuming all operators are either Hermitian or anti-Hermitian.")
+        # self.hermitian_dict = {op_str: ('X' in op_str) for op_str in self.operator_basis}
+        # self.hermitian_dict = {op_str: True for op_str in self.operator_basis}
         self.hermitian_dict = hermitian_dict
         if set(hermitian_dict.keys()) != set(operator_basis):
-            raise ValueError("Warning, keys of hermitian_dict must match operator_basis elements.")
+            raise ValueError(
+                "Warning, keys of hermitian_dict must match operator_basis elements."
+            )
         self.commutation_rules = self.build_commutation_rules(commutation_rules_concise)
-
 
     def hermitian_conjugate(self, operator: MatrixOperator) -> Self:
         # assumes operator basis is Hermitian or anti-Hermitian
         data = {}
         for op, coeff in operator:
             reversed_op = op[::-1]
-            num_antihermitian = sum(1 * (not self.hermitian_dict[op_str]) for op_str in op)
-            data[reversed_op] = (-1)**num_antihermitian * np.conjugate(coeff)
+            num_antihermitian = sum(
+                1 * (not self.hermitian_dict[op_str]) for op_str in op
+            )
+            data[reversed_op] = (-1) ** num_antihermitian * np.conjugate(coeff)
         return operator.__class__(data=data)
-        '''
+        """
         return self.__class__(
             data={
                 op[::-1]: np.conjugate(coeff)
                 for op, coeff in self
             }
         )
-        '''
+        """
 
     def build_commutation_rules(self, commutation_rules_concise):
         """
