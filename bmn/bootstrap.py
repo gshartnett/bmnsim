@@ -1,6 +1,6 @@
 from collections import Counter
 from itertools import product
-from typing import Union
+from typing import Union, Optional
 
 import numpy as np
 from scipy.sparse import (
@@ -84,6 +84,7 @@ class BootstrapSystem:
         self.tol = tol
         self.null_space_matrix = None
         self._validate()
+        self.constraints = None
 
     def _validate(self):
         """
@@ -103,10 +104,26 @@ class BootstrapSystem:
                         f"Invalid operator: constrains term {op_str} which is not in operator_basis."
                     )
 
+    def build_null_space_matrix(
+        self, additional_constraints: Optional[list[SingleTraceOperator]] = None
+    ) -> np.ndarray:
+        """
+        Builds the null space matrix, K_{ia}.
+
+        Note that K_{ia} K_{ib} = delta_{ab}.
+        """
+        linear_constraint_matrix = self.build_linear_constraints(
+            additional_constraints
+        ).todense()
+        null_space_matrix = get_null_space(linear_constraint_matrix)
+        self.null_space_matrix = null_space_matrix
+        self.param_dim_null = self.null_space_matrix.shape[1]
+        print(f"param_dim_null = {self.param_dim_null}")
+        return
+
     def get_null_space_matrix(self) -> np.ndarray:
         """
         Retrieves the null space matrix, K_{ia}, building it if necessary.
-        Note that K_{ia} K_{ib} = delta_{ab}.
 
         Returns
         -------
@@ -115,20 +132,8 @@ class BootstrapSystem:
         """
         if self.null_space_matrix is not None:
             return self.null_space_matrix
-        else:
-            print(
-                "Null matrix has not been computed yet. Building it by solving the linear constraints."
-            )
-            linear_constraint_matrix = self.build_linear_constraints().todense()
-            null_space_matrix = get_null_space(linear_constraint_matrix)
-
-            # print(f"replacing null space matrix with identity for debugging purposes!")
-            # self.null_space_matrix = np.eye(self.param_dim)
-
-            self.null_space_matrix = null_space_matrix
-
-            self.param_dim_null = self.null_space_matrix.shape[1]
-            return null_space_matrix
+        self.build_null_space_matrix()
+        return self.null_space_matrix
 
     def generate_operators(self, max_degree: int) -> list[str]:
         """
@@ -288,33 +293,15 @@ class BootstrapSystem:
                 constraints[idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
         return constraints
 
-    def build_linear_constraints(
-        self,
-        return_matrix: bool = True,
-    ) -> Union[list[SingleTraceOperator, coo_matrix]]:
+    def generate_all_linear_constraints(self) -> list[SingleTraceOperator]:
         """
-        Build the linear constraints. Each linear constraint corresponds to a
-        linear combination of single trace operators that must vanish. The set
-        of linear constraints may be numerically represented as a matrix L_{ij},
-        where the first index runs over the set of all such constraints, and the
-        second index runs over the set of single trace operators considered at this
-        bootstrap, i.e., the constraint equations are
-
-        L_{ij} v_j = 0.
-
-        Parameters
-        ----------
-        return_matrix : bool, optional
-            Flag used to control whether a numerical matrix is returned (default) or
-            a list of SingleTraceOperators, which can be helpful for debugging.
-            By default True
+        Generate all linear constraints.
 
         Returns
         -------
-        Union[list[SingleTraceOperator, coo_matrix]]
-            The set of linear constraints.
+        list[SingleTraceOperator
+            The list of linear constraints.
         """
-
         empty_operator = SingleTraceOperator(data={(): 0})
         constraints = []
 
@@ -349,24 +336,50 @@ class BootstrapSystem:
                 if st_operator != empty_operator:
                     constraints.append({op: coeff for op, coeff in st_operator})
 
-        # optionally return the constraints in a human-readable form
-        if not return_matrix:
-            return constraints
+        return constraints
+
+    def build_linear_constraints(
+        self, additional_constraints: Optional[list[SingleTraceOperator]] = None
+    ) -> coo_matrix:
+        """
+        Build the linear constraints. Each linear constraint corresponds to a
+        linear combination of single trace operators that must vanish. The set
+        of linear constraints may be numerically represented as a matrix L_{ij},
+        where the first index runs over the set of all such constraints, and the
+        second index runs over the set of single trace operators considered at this
+        bootstrap, i.e., the constraint equations are
+
+        L_{ij} v_j = 0.
+
+        NOTE: Not sure if it's a good idea to store the constraints, good become memory intensive.
+
+        Returns
+        -------
+        coo_matrix
+            The set of linear constraints.
+        """
+        # grab the constraints, building them if necessary
+        if self.constraints is None:
+            self.constraints = self.generate_all_linear_constraints()
+
+        # add the additional constraints
+        if additional_constraints is not None:
+            self.constraints += additional_constraints
 
         # build the index-value dict
         index_value_dict = {}
-        for idx_constraint, constraint_dict in enumerate(constraints):
+        for idx_constraint, constraint_dict in enumerate(self.constraints):
+            #print(type(constraint_dict), constraint_dict)
             for op, coeff in constraint_dict.items():
                 index_value_dict[(idx_constraint, self.operator_dict[op])] = coeff
 
+        # return the constraint matrix
         return create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
-            matrix_shape=(len(constraints), len(self.operator_list)),
+            matrix_shape=(len(self.constraints), len(self.operator_list)),
         )
 
-    def build_quadratic_constraints(
-        self, impose_linear_constraints=True
-    ) -> dict[str, np.ndarray]:
+    def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
         """
         Build the quadratic constraints. The quadratic constraints are exclusively due to
         the cyclic constraints. The constraints can be written as
@@ -388,7 +401,7 @@ class BootstrapSystem:
 
         empty_operator = SingleTraceOperator(data={(): 0})
         constraints = self.generate_cyclic_constraints()
-
+        additional_constraints = []
         null_space_matrix = self.get_null_space_matrix()
 
         linear_terms = []
@@ -402,8 +415,6 @@ class BootstrapSystem:
             lhs_is_empty = term["lhs"] == empty_operator
             rhs_is_zero = sum(abs(x[0]) for x in term["rhs"]) < self.tol
 
-            # print(f"operator_idx = {operator_idx}, rhs_is_zero = {rhs_is_zero}")
-
             if lhs_is_empty != rhs_is_zero:
                 raise ValueError(
                     f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
@@ -414,8 +425,6 @@ class BootstrapSystem:
                 linear_constraint_vector = self.single_trace_to_coefficient_vector(
                     term["lhs"]
                 )
-
-                # print(f"considering constraint {constraint_idx}, operator_idx = {operator_idx}, {term['lhs']}, {term['rhs']}")
 
                 # initialize the quadratic constraint matrix
                 quadratic_matrix = np.zeros((self.param_dim, self.param_dim))
@@ -448,43 +457,42 @@ class BootstrapSystem:
                             )
                         )
 
-                # TODO remove this
-                if impose_linear_constraints:
-                    # transform to null basis
-                    linear_constraint_vector = np.dot(
-                        linear_constraint_vector, null_space_matrix
-                    )
-                    quadratic_matrix = np.einsum(
-                        "ia, ij, jb->ab",
-                        null_space_matrix,
-                        quadratic_matrix,
-                        null_space_matrix,
-                    )
-                else:
-                    print(
-                        "Note: not imposing linear constraints by transforming to Null basis."
-                    )
+                # transform to null basis
+                linear_constraint_vector = np.dot(
+                    linear_constraint_vector, null_space_matrix
+                )
+                quadratic_matrix = np.einsum(
+                    "ia, ij, jb->ab",
+                    null_space_matrix,
+                    quadratic_matrix,
+                    null_space_matrix,
+                )
 
                 linear_is_zero = np.max(np.abs(linear_constraint_vector)) < self.tol
                 quadratic_is_zero = np.max(np.abs(quadratic_matrix)) < self.tol
 
-                if (not quadratic_is_zero) and (not linear_is_zero):
-                    # print(f"constraint {counter} corresponds to operator_idx {operator_idx}, op = {self.operator_list[operator_idx]}")
+                # add the quadratic constraint
+                if not quadratic_is_zero:
                     linear_terms.append(linear_constraint_vector)
                     quadratic_terms.append(quadratic_matrix)
-                    counter += 1
 
-                if quadratic_is_zero and not linear_is_zero:
-                    print(
-                        f"constraint from operator_idx = {operator_idx} is quadratically trivial."
-                    )
-                elif not quadratic_is_zero and linear_is_zero:
-                    print(
-                        f"constraint operator_idx = {operator_idx} is linearly trivial."
-                    )
+                # unless it simplifies to a linear constraint
+                else:
+                    # check if the linear constraint is new, and add it if it is
+                    constraint_dict = {op: coeff for op, coeff in term["lhs"]}
+                    if constraint_dict not in self.constraints:
+                        additional_constraints.append({op: coeff for op, coeff in term["lhs"]})
+                        print(
+                            f"Constraint from operator_idx = {operator_idx} is quadratically trivial, adding it to the linear constraints."
+                        )
+
+        # if additional constraints were found, rebuild the null space matrix and start over
+        if len(additional_constraints) > 0:
+            self.build_null_space_matrix(additional_constraints=additional_constraints)
+            return self.build_quadratic_constraints()
 
         # map to numpy arrays
-        # THE MINUS SIGN IS VERY IMPORTANT: (-RHS + LHS = 0)
+        # NOTE the minus sign is very important: (-RHS + LHS = 0)
         quadratic_terms = -np.asarray(quadratic_terms)
         linear_terms = np.asarray(linear_terms)
 
@@ -627,25 +635,3 @@ class BootstrapSystem:
         )
 
         return bootstrap_array_sparse
-
-    """
-    def XXXXbuild_optimization_problem(self):
-        linear_constraint_matrix = self.build_linear_constraints().todense()
-        null_space_matrix = get_null_space(linear_constraint_matrix)
-
-        self.param_dim_null = null_space_matrix.shape[1]
-        self.null_space_matrix = null_space_matrix
-
-        bootstrap_dict = self.build_bootstrap_table(null_space_matrix=null_space_matrix)
-        quadratic_constraints = self.build_quadratic_constraints(
-            null_space_matrix=null_space_matrix
-        )
-
-        # map to a sparse array
-        bootstrap_array = np.zeros((self.psd_matrix_dim, self.psd_matrix_dim, self.param_dim_null))
-        for (i, j, k), value in bootstrap_dict.items():
-            bootstrap_array[i,j,k] = value
-        bootstrap_array_sparse = csr_matrix(bootstrap_array.reshape(bootstrap_array.shape[0] * bootstrap_array.shape[1], bootstrap_array.shape[2]))
-
-        return bootstrap_array_sparse, quadratic_constraints
-    """

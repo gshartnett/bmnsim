@@ -270,7 +270,7 @@ def get_quadratic_constraint_vector(
 def minimize(
     bootstrap,
     op,
-    init=None,
+    #init=None,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
     eps=5e-4,
@@ -301,9 +301,8 @@ def minimize(
     quadratic_constraints = bootstrap.build_quadratic_constraints()
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
 
-    if init is None:
-        # init = np.random.normal(size=bootstrap.param_dim_null)
-        init = np.zeros(bootstrap.param_dim_null)
+    # init = np.random.normal(size=bootstrap.param_dim_null)
+    init = np.zeros(bootstrap.param_dim_null)
 
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
 
@@ -346,6 +345,7 @@ def minimize(
     else:
         debug("Starting from scratch...")
         # find an initial parameter close to init that makes all bootstrap matrices positive
+        #print(f"INSIDE SOLVER, param_dim_null = {bootstrap.param_dim_null}, {A_op.shape, b_op.shape, init.shape}")
         param = sdp_init(
             bootstrap_array_sparse=bootstrap_array_sparse,
             A=A_op,
@@ -353,6 +353,7 @@ def minimize(
             init=init,
             verbose=verbose,
         )
+        # NOTE why are the two norms not being used!!!
         linear_constraint_norm = compute_L2_norm_of_linear_constraints(
             A=A_op, b=b_op, param=param
         )
