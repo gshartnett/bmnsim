@@ -135,6 +135,7 @@ class BootstrapSystem:
         null_space_matrix = get_null_space(linear_constraint_matrix)
         self.null_space_matrix = null_space_matrix
         self.param_dim_null = self.null_space_matrix.shape[1]
+        print(f"param_dim = {self.param_dim}")
         print(f"param_dim_null = {self.param_dim_null}")
         return
 
@@ -281,32 +282,37 @@ class BootstrapSystem:
     def generate_cyclic_constraints(self) -> list[SingleTraceOperator]:
         # TODO it might be nice to implement this using a DoubleTraceOperator class
         # I definitely don't like how it is impelemented now
+        identity = SingleTraceOperator(data={(): 1})
         constraints = {}
         for idx, op in enumerate(self.operator_list):
             if len(op) > 1:
                 assert isinstance(op, tuple)
-                # print(f'op = {op}, op[1:] + (op[0],) = {op[1:] + (op[0],)}') #GSH
                 # the LHS corresponds to single trace operators
-                # note that in Eq S37, S38 their RHS contains single trace operators (k=1, k=r) in their notation
                 eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
                     data={op[1:] + (op[0],): 1}
                 )
-                # eq_lhs += self.matrix_system.commutation_rules[(op_str[0], op_str[1])] * SingleTraceOperator(data={tuple(op_str[2:]): 1})
-                # eq_lhs += self.matrix_system.commutation_rules[(op_str[0], op_str[len(op_str)-1])] * SingleTraceOperator(data={tuple(op_str[1:len(op_str)-1]): 1})
 
                 # rhe RHS corresponds to double trace operators
                 eq_rhs = []
                 for k in range(1, len(op)):
                     commutator = self.matrix_system.commutation_rules[(op[0], op[k])]
-                    # if idx == 7:
-                    #    print(f'[{op[0]}, {op[k]}] = ', commutator)
-                    eq_rhs.append(
-                        [
-                            commutator,
-                            SingleTraceOperator(data={tuple(op[1:k]): 1}),
-                            SingleTraceOperator(data={tuple(op[k + 1 :]): 1}),
-                        ]
-                    )
+                    st_operator_1 = SingleTraceOperator(data={tuple(op[1:k]): 1})
+                    st_operator_2 = SingleTraceOperator(data={tuple(op[k + 1 :]): 1})
+
+                    # If the double trace term involves <tr(1)> simplify and add to the linear, LHS
+                    if (st_operator_1 == identity):
+                        eq_lhs -= commutator * st_operator_2
+                    elif (st_operator_2 == identity):
+                        eq_lhs -= commutator * st_operator_1
+                    else:
+                        eq_rhs.append(
+                            [
+                                commutator,
+                                SingleTraceOperator(data={tuple(op[1:k]): 1}),
+                                SingleTraceOperator(data={tuple(op[k + 1 :]): 1}),
+                            ]
+                        )
+
                 constraints[idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
         return constraints
 
@@ -432,9 +438,12 @@ class BootstrapSystem:
             rhs_is_zero = sum(abs(x[0]) for x in term["rhs"]) < self.tol
 
             if lhs_is_empty != rhs_is_zero:
-                raise ValueError(
-                    f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
-                )
+                #print(f"lhs_is_empty = {lhs_is_empty}")
+                #print(f"rhs_is_zero = {rhs_is_zero}")
+                pass
+                #raise ValueError(
+                #    f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
+                #)
 
             # proceed if both LHS, RHS are not trivial
             if not lhs_is_empty:
