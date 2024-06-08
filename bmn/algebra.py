@@ -128,7 +128,8 @@ class SingleTraceOperator(MatrixOperator):
     def __str__(self) -> str:
         x = ""
         for idx, (coeff, op) in enumerate(zip(self.coeffs, self.operators)):
-            x += f"{coeff}" + f" tr {op}"
+            op_str = ''.join(op)
+            x += f"{coeff}" + f" < tr {op_str} >"
             if idx != len(self.operators) - 1:
                 x += " + "
         return x

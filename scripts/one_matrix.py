@@ -8,7 +8,7 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
 
-g = 1.5
+g = 3.7
 L = 3
 
 matrix_system = MatrixSystem(
@@ -33,7 +33,7 @@ hamiltonian = SingleTraceOperator(
 gauge = MatrixOperator(data={("X", "Pi"): 1, ("Pi", "X"): -1, (): 1})
 
 bootstrap = BootstrapSystem(
-    matrix_system=matrix_system, hamiltonian=hamiltonian, gauge=gauge, half_max_degree=L, odd_degree_vanish=False,
+    matrix_system=matrix_system, hamiltonian=hamiltonian, gauge=gauge, half_max_degree=L, odd_degree_vanish=True,
 )
 
 bootstrap.get_null_space_matrix()
@@ -43,7 +43,7 @@ disable_debug()
 param, success = minimize(
     bootstrap=bootstrap,
     op=bootstrap.hamiltonian,
-    init_scale = 10.0,
+    init_scale = 1.0,
     verbose=False,
     maxiters=25,
     reg=5e-4,

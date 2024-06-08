@@ -248,6 +248,7 @@ class BootstrapSystem:
         constraints = []
         for op in self.operator_list:
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
+            #constraints.append((MatrixOperator(data={op: 1}) * self.gauge).trace()) # doesn't seem to add any constraintss
         return self.clean_constraints(constraints)
 
     def generate_odd_degree_vanish_constraints(self) -> list[SingleTraceOperator]:
@@ -432,14 +433,15 @@ class BootstrapSystem:
 
         # loop over constraints
         for constraint_idx, (operator_idx, term) in enumerate(constraints.items()):
+            #print(f'Building quadratic constraints: {constraint_idx+1}/{len(constraints)}')
 
             # check that either both LHS and RHS are trivial, or neither are
             lhs_is_empty = term["lhs"] == empty_operator
             rhs_is_zero = sum(abs(x[0]) for x in term["rhs"]) < self.tol
+            #print(f"constraint_idx = {constraint_idx}, op = {self.operator_list[operator_idx]}, lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
 
             if lhs_is_empty != rhs_is_zero:
-                #print(f"lhs_is_empty = {lhs_is_empty}")
-                #print(f"rhs_is_zero = {rhs_is_zero}")
+                #print(f"lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
                 pass
                 #raise ValueError(
                 #    f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
@@ -530,6 +532,8 @@ class BootstrapSystem:
         linear_terms = np.asarray(linear_terms)
 
         # check that the quadratic matrix is symmetric
+        print('LIN SHAPE', linear_terms.shape)
+        print('QUAD SHAPE', quadratic_terms.shape)
         if not np.allclose(quadratic_terms, np.einsum("Iab->Iba", quadratic_terms)):
             raise ValueError("Quadratic matrix not symmetric.")
 

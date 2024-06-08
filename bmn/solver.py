@@ -303,7 +303,15 @@ def minimize(
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
 
     # initial parameter vector
+    print(f"Initializing randomly")
     init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
+
+    #print(f"Initializing from all 1's")
+    #init = np.ones(shape=bootstrap.param_dim_null)
+
+    #print(f"Initializing from all 0's")
+    #init = np.zeros(shape=bootstrap.param_dim_null)
+
     init = bootstrap.scale_param_to_enforce_normalization(init) # rescale to normalize
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
