@@ -16,6 +16,7 @@ from bmn.algebra import (
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space,
+    get_row_space,
 )
 
 
@@ -416,6 +417,10 @@ class BootstrapSystem:
 
         where A'_{Iab} = A_{Iij} K_{ia} K_{jb}, B'_{Ia} = B_{Ii} K_{ia}
 
+        The quadratic constraint tensor can be written as
+            A_{Iij} = (1/2) sum_{k=0}^{K_I-1} (v_i^{(I,k)} v_j^{(I,k)} + v_j^{(I,k)} v_i^{(I,k)})
+        for vectors v^{(I,k)}. For each I, the vectors correspond to the double trace terms, <tr()> <tr()>.
+
         Returns
         -------
         dict[str, np.nparray]
@@ -532,10 +537,19 @@ class BootstrapSystem:
         linear_terms = np.asarray(linear_terms)
 
         # check that the quadratic matrix is symmetric
-        print('LIN SHAPE', linear_terms.shape)
-        print('QUAD SHAPE', quadratic_terms.shape)
         if not np.allclose(quadratic_terms, np.einsum("Iab->Iba", quadratic_terms)):
             raise ValueError("Quadratic matrix not symmetric.")
+
+        # apply reduction
+        num_constraints = quadratic_terms.shape[0]
+        print(f"Number of quadratic constraints before row reduction: {num_constraints}")
+        quadratic_terms = quadratic_terms.reshape((num_constraints, self.param_dim_null**2))
+        stacked_matrix = np.hstack([quadratic_terms, linear_terms])
+        stacked_matrix = get_row_space(stacked_matrix)
+        num_constraints = stacked_matrix.shape[0]
+        linear_terms = stacked_matrix[:,  self.param_dim_null**2:]
+        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2].reshape((num_constraints, self.param_dim_null, self.param_dim_null))
+        print(f"Number of quadratic constraints after row reduction: {num_constraints}")
 
         return {
             "linear": linear_terms,
