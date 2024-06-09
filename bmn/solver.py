@@ -34,7 +34,7 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import debug
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
-    get_null_space,
+    get_null_space_sparse,
 )
 
 """
@@ -50,11 +50,10 @@ def compute_L2_norm_of_linear_constraints(A, b, param):
 
 
 def compute_L2_norm_of_quadratic_constraints(quadratic_constraints, param):
-    # quadratic_constraints = bootstrap.build_quadratic_constraints()
-    constraints = quadratic_constraints["linear"] @ param + np.einsum(
-        "Iij, i, j -> I", quadratic_constraints["quadratic"], param, param
-    )
-    return np.sum(np.square(constraints))
+    linear_term = quadratic_constraints["linear"] @ param
+    param_product = np.outer(param, param).reshape((len(param) ** 2))
+    quadratic_term = quadratic_constraints["quadratic"] @ param_product
+    return np.sum(np.square(linear_term + quadratic_term))
 
 
 def minimal_eigval(bootstrap_array_sparse, parameter_vector_null):
@@ -212,7 +211,7 @@ def sdp_minimize(
 
 def get_quadratic_constraint_vector(
     quadratic_constraints: dict[str, np.ndarray],
-    param_vector: np.ndarray,
+    param: np.ndarray,
     compute_grad: bool = False,
 ) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
     """
@@ -227,7 +226,7 @@ def get_quadratic_constraint_vector(
     quadratic_constraints : dict[str, np.ndarray]
         The quadratic and linear parts of the quadratic/cyclic constraints,
         represented as arrays.
-    param_vector : np.ndarray
+    param : np.ndarray
         The parameter vector in the null space, u.
     compute_grad : bool, optional
         Controls whether the grad is computed, by default False.
@@ -242,26 +241,30 @@ def get_quadratic_constraint_vector(
     linear_matrix = quadratic_constraints["linear"]
 
     # compute the constraint vector
-    quadratic_term = np.einsum(
-        "Iij, i, j -> I", quadratic_array, param_vector, param_vector
-    )
-    linear_term = np.einsum("Ii, i -> I", linear_matrix, param_vector)
-    constraint_vector = quadratic_term + linear_term
+    # quadratic_term = np.einsum(
+    #    "Iij, i, j -> I", quadratic_array, param_vector, param_vector
+    # )
+    # linear_term = np.einsum("Ii, i -> I", linear_matrix, param_vector)
+    # constraint_vector = quadratic_term + linear_term
+    linear_term = quadratic_constraints["linear"] @ param
+    param_product = np.outer(param, param).reshape((len(param) ** 2))
+    quadratic_term = quadratic_constraints["quadratic"] @ param_product
+    constraint_vector = linear_term + quadratic_term
 
     if not compute_grad:
         return constraint_vector
 
+    # is there a more efficient way to do this?
+    num_constraints = linear_term.shape[0]
+    quadratic_array = np.asarray(quadratic_constraints["quadratic"].todense())
+    quadratic_array = quadratic_array.reshape((num_constraints, len(param), len(param)))
     # compute the gradient matrix
-    constraint_grad_quadratic_term_1 = np.einsum(
-        "Iij, i -> Ij", quadratic_array, param_vector
-    )
-    constraint_grad_quadratic_term_2 = np.einsum(
-        "Iij, j -> Ii", quadratic_array, param_vector
-    )
+    constraint_grad_quadratic_term_1 = np.einsum("Iij, i -> Ij", quadratic_array, param)
+    constraint_grad_quadratic_term_2 = np.einsum("Iij, j -> Ii", quadratic_array, param)
     constraint_grad = (
-        constraint_grad_quadratic_term_1
+        quadratic_constraints["linear"]
+        + constraint_grad_quadratic_term_1
         + constraint_grad_quadratic_term_2
-        + linear_matrix
     )
 
     return constraint_vector, constraint_grad

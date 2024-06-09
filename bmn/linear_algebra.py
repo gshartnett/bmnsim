@@ -5,7 +5,16 @@ from scipy.linalg import (
     null_space,
     svd,
 )
-from scipy.sparse import coo_matrix
+from scipy.sparse import (
+    coo_matrix,
+    csc_matrix,
+)
+from scipy.sparse.linalg import svds
+from sparseqr import qr
+
+from bmn.debug_utils import debug
+
+TOL = 1e-12
 
 
 def create_sparse_matrix_from_dict(
@@ -58,10 +67,9 @@ def create_sparse_matrix_from_dict(
     return sparse_matrix
 
 
-def get_null_space(matrix: np.matrix, tol: float = 1e-10) -> np.ndarray:
+def get_null_space_dense(matrix: np.matrix, tol: float = TOL) -> np.ndarray:
     """
     Get the null space of a rectangular matrix M.
-    TODO can I make this work for sparse matrices?
 
     Parameters
     ----------
@@ -89,10 +97,11 @@ def get_null_space(matrix: np.matrix, tol: float = 1e-10) -> np.ndarray:
     return null_space_matrix
 
 
-def get_row_space(matrix: np.ndarray, tol: float = 1e-10) -> np.ndarray:
+def get_row_space_dense(matrix: np.ndarray, tol: float = TOL) -> np.ndarray:
 
     # perform SVD on the matrix
-    U, S, Vt = svd(matrix)
+    U, S, Vh = svd(matrix)
+    # U, S, Vh = svds(matrix, k=min(matrix.shape[0], matrix.shape[1]), solver='propack')
 
     # determine rank of matrix
     rank = np.sum(
@@ -100,15 +109,49 @@ def get_row_space(matrix: np.ndarray, tol: float = 1e-10) -> np.ndarray:
     )  # Consider singular values greater than a small threshold as non-zero
 
     # extract basis of the row space from the top rank rows of Vt
-    row_space_basis = Vt[:rank, :]
+    row_space_basis = Vh[:rank, :]
 
     return row_space_basis
 
 
-def is_in_row_space(matrix: np.ndarray, vector: np.ndarray) -> bool:
+def get_null_space_sparse(matrix, tol: float = TOL):
+    """
+    Computes the right null space of a sparse matrix.
+    Arguments:
+        mat (sparse matrix): the matrix to compute, of shape (M, N)
+    Returns:
+        null (sparse matrix): a basis of the null space, of shape (N, K)
+    """
+    q, _, _, rank = qr(matrix.transpose())
+    null_space_matrix = csc_matrix(q)[:, rank:]
+    verification_result = matrix @ null_space_matrix
+    if not np.max(np.abs(verification_result)) <= tol:
+        raise ValueError("Warning, null space condition not satisfied.")
+    return null_space_matrix
+
+
+def get_row_space_sparse(matrix, tol: float = TOL):
+    """
+    Computes the row space of a sparse matrix.
+    Arguments:
+            mat (sparse matrix): the matrix to compute, of shape (M, N)
+    Returns:
+            r (sparse matrix): a basis of the row space, of shape (K, N)
+    """
+    # debug("range_space: input shape {}".format(mat.shape))
+    # q, _, _, rank = sparseqr.qr(mat.transpose())
+    q, _, _, rank = qr(matrix.transpose())
+    r = csc_matrix(q)[:, :rank].transpose()
+    # sanity check
+    assert r.shape[1] == matrix.shape[1], "dimension mismatch"
+    # debug("range_space: solution shape {}".format(r.shape))
+    return r
+
+
+def is_in_row_space_dense(matrix: np.ndarray, vector: np.ndarray) -> bool:
     if matrix.shape[1] != len(vector):
         raise ValueError("Error, dimension mismatch.")
-    row_space_matrix = get_row_space(matrix)
+    row_space_matrix = get_row_space_dense(matrix)
 
     # Project the vector v onto the row space
     # Solve the linear system row_space_basis.T * c = v to find the coefficients c

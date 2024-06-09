@@ -9,7 +9,7 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
 
-g = 0.01
+g = 1.4
 L = 3
 
 matrix_system = MatrixSystem(
@@ -55,23 +55,17 @@ param, success = minimize(
     eps=5e-4,
 )
 
+"""
 for op in bootstrap.operator_list:
     vec = bootstrap.single_trace_to_coefficient_vector(
         st_operator=SingleTraceOperator(data={op: 1}), return_null_basis=True
     )
     op_expectation_value = vec @ param
     print(f"op = {op}, EV = {op_expectation_value}")
+"""
 
 vec = bootstrap.single_trace_to_coefficient_vector(
     st_operator=hamiltonian, return_null_basis=True
 )
 energy = vec @ param
 print(f"problem success: {success}, min energy: {energy}")
-print(f"{len(bootstrap.operator_list)} operators considered")
-print(
-    f"number of odd-degree operators: {len(bootstrap.generate_odd_degree_vanish_constraints())}"
-)
-
-quad_cons = bootstrap.build_quadratic_constraints()
-print(f"null space dimension: {len(vec)}")
-print(f"number of quadratic constraints = {quad_cons['quadratic'].shape[0]}")

@@ -13,6 +13,7 @@ class AbstractMatrixOperator:
     """
     Abstract matrix operator class.
     """
+
     def __init__(self):
         raise NotImplementedError()
 

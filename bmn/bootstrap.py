@@ -9,55 +9,21 @@ import numpy as np
 from scipy.sparse import (
     coo_matrix,
     csr_matrix,
+    hstack,
+    vstack,
 )
 
 from bmn.algebra import (
+    DoubleTraceOperator,
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
-    DoubleTraceOperator,
 )
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
-    get_null_space,
-    get_row_space,
+    get_null_space_sparse,
+    get_row_space_sparse,
 )
-
-
-def is_purely_real(number):
-    """
-    Check if a number is purely real.
-
-    Args:
-    number (complex or real): The number to check.
-
-    Returns:
-    bool: True if the number is purely real, False otherwise.
-    """
-    if isinstance(number, (int, float)):
-        return True  # Real numbers (int, float) are purely real
-    elif isinstance(number, complex):
-        return (
-            number.imag == 0
-        )  # Complex number with zero imaginary part is purely real
-    return False  # Other types are not considered here
-
-
-def is_purely_imaginary(number):
-    """
-    Check if a number is purely imaginary.
-
-    Args:
-    number (complex): The number to check.
-
-    Returns:
-    bool: True if the number is purely imaginary, False otherwise.
-    """
-    if isinstance(number, complex):
-        return (
-            number.real == 0
-        )  # Complex number with zero real part is purely imaginary
-    return False  # Other types cannot be purely imaginary
 
 
 class BootstrapSystem:
@@ -90,6 +56,7 @@ class BootstrapSystem:
         self.null_space_matrix = None
         self._validate()
         self.linear_constraints = None
+        self.quadratic_constraints = None
 
     def _validate(self):
         """
@@ -97,6 +64,7 @@ class BootstrapSystem:
         """
         self.validate_operator(operator=self.gauge)
         self.validate_operator(operator=self.hamiltonian)
+        print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
 
     def validate_operator(self, operator: MatrixOperator):
         """
@@ -136,14 +104,11 @@ class BootstrapSystem:
 
         Note that K_{ia} K_{ib} = delta_{ab}.
         """
-        linear_constraint_matrix = self.build_linear_constraints(
-            additional_constraints
-        ).todense()
-        null_space_matrix = get_null_space(linear_constraint_matrix)
+        linear_constraint_matrix = self.build_linear_constraints(additional_constraints)
+        null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
         self.null_space_matrix = null_space_matrix
         self.param_dim_null = self.null_space_matrix.shape[1]
-        print(f"param_dim = {self.param_dim}")
-        print(f"param_dim_null = {self.param_dim_null}")
+        print(f"Null space dimension (number of parameters) = {self.param_dim_null}")
         return
 
     def get_null_space_matrix(self) -> np.ndarray:
@@ -211,16 +176,29 @@ class BootstrapSystem:
         """
         # validate
         self.validate_operator(operator=st_operator)
-
-        null_space_matrix = self.get_null_space_matrix()
-
         vec = [0] * self.param_dim
         for op, coeff in st_operator:
             idx = self.operator_dict[op]
             vec[idx] = coeff
         if not return_null_basis:
             return np.asarray(vec)
-        return np.asarray(vec) @ null_space_matrix
+        return np.asarray(vec) @ self.get_null_space_matrix()
+
+    def double_trace_to_coefficient_matrix(self, dt_operator: DoubleTraceOperator):
+        # use large-N factorization <tr(O1)tr(O2)> = <tr(O1)><tr(O2)>
+        # to represent the double-trace operator as a quadratic expression of single trace operators,
+        # \sum_{ij} M_{ij} v_i v_j, represented as an index-value dict.
+        index_value_dict = {}
+        for (op1, op2), coeff in dt_operator:
+            idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
+            index_value_dict[(idx1, idx2)] = coeff
+
+        mat = create_sparse_matrix_from_dict(
+            index_value_dict=index_value_dict,
+            matrix_shape=(len(self.operator_list), len(self.operator_list)),
+        )
+
+        return mat
 
     def generate_hamiltonian_constraints(self) -> list[SingleTraceOperator]:
         """
@@ -287,7 +265,9 @@ class BootstrapSystem:
                 constraints.append(st_operator - st_operator_dagger)
         return self.clean_constraints(constraints)
 
-    def generate_cyclic_constraints(self) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
+    def generate_cyclic_constraints(
+        self,
+    ) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
         """
         Generate cyclic constraints relating single trace operators to double
         trace operators. See S37 of
@@ -302,7 +282,7 @@ class BootstrapSystem:
         quadratic_constraints = {}
         linear_constraints = {}
         for idx, op in enumerate(self.operator_list):
-            if len(op) > 1: # TODO check this...
+            if len(op) > 1:  # TODO check this...
                 assert isinstance(op, tuple)
                 # the LHS corresponds to single trace operators
                 eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
@@ -310,7 +290,7 @@ class BootstrapSystem:
                 )
 
                 # rhe RHS corresponds to double trace operators
-                #eq_rhs = []
+                # eq_rhs = []
                 eq_rhs = DoubleTraceOperator(data={})
                 for k in range(1, len(op)):
                     commutator = self.matrix_system.commutation_rules[(op[0], op[k])]
@@ -331,7 +311,9 @@ class BootstrapSystem:
 
                 # do not expect to find any constraints where the linear term vanishes but the quadratic term does not
                 elif eq_lhs.is_zero() and not eq_rhs.is_zero():
-                    raise ValueError(f"Warning, for operator index {idx}, op={op}, the LHS is unexpectedly 0")
+                    raise ValueError(
+                        f"Warning, for operator index {idx}, op={op}, the LHS is unexpectedly 0"
+                    )
 
                 # record proper quadratic constraints
                 elif not eq_lhs.is_zero():
@@ -352,36 +334,32 @@ class BootstrapSystem:
 
         # Hamiltonian constraints
         hamiltonian_constraints = self.generate_hamiltonian_constraints()
-        print(f"generated {len(hamiltonian_constraints)} Hamiltonian constraints")
+        print(f"Generated {len(hamiltonian_constraints)} Hamiltonian constraints")
         linear_constraints.extend(hamiltonian_constraints)
 
         # gauge constraints
         gauge_constraints = self.generate_gauge_constraints()
-        print(f"generated {len(gauge_constraints)} gauge constraints")
+        print(f"Generated {len(gauge_constraints)} gauge constraints")
         linear_constraints.extend(gauge_constraints)
 
         # reality constraints
         reality_constraints = self.generate_reality_constraints()
-        print(f"generated {len(reality_constraints)} reality constraints")
+        print(f"Generated {len(reality_constraints)} reality constraints")
         linear_constraints.extend(reality_constraints)
 
         # odd degree vanish
         if self.odd_degree_vanish:
             odd_degree_constraints = self.generate_odd_degree_vanish_constraints()
             print(
-                f"generated {len(odd_degree_constraints)} odd degree vanish constraints"
+                f"Generated {len(odd_degree_constraints)} odd degree vanish constraints"
             )
         linear_constraints.extend(odd_degree_constraints)
 
         # cyclic constraints
         cyclic_linear, cyclic_quadratic = self.generate_cyclic_constraints()
         cyclic_linear = list(cyclic_linear.values())
-        print(
-            f"generated {len(cyclic_linear)} linear cyclic constraints"
-        )
-        print(
-            f"generated {len(cyclic_quadratic)} quadratic cyclic constraints"
-        )
+        print(f"Generated {len(cyclic_linear)} linear cyclic constraints")
+        print(f"Generated {len(cyclic_quadratic)} quadratic cyclic constraints")
         linear_constraints.extend(cyclic_linear)
 
         return linear_constraints, cyclic_quadratic
@@ -408,11 +386,13 @@ class BootstrapSystem:
         """
         # grab the constraints, building them if necessary
         if self.linear_constraints is None:
-            self.linear_constraints = self.generate_constraints()[0]
+            constraints = self.generate_constraints()
+            self.linear_constraints = constraints[0]
+            self.quadratic_constraints = constraints[1]
 
         # add the additional constraints
         if additional_constraints is not None:
-            self.constraints += additional_constraints
+            self.linear_constraints += additional_constraints
 
         # build the index-value dict
         index_value_dict = {}
@@ -450,8 +430,10 @@ class BootstrapSystem:
             {'quadratic': A, 'linear': B}
         """
 
-        empty_operator = SingleTraceOperator(data={(): 0})
-        constraints = self.generate_cyclic_constraints()
+        if self.quadratic_constraints is None:
+            self.build_linear_constraints()
+        quadratic_constraints = self.quadratic_constraints
+
         additional_constraints = []
         null_space_matrix = self.get_null_space_matrix()
 
@@ -459,128 +441,77 @@ class BootstrapSystem:
         quadratic_terms = []
 
         # loop over constraints
-        for constraint_idx, (operator_idx, term) in enumerate(constraints.items()):
-            # print(f'Building quadratic constraints: {constraint_idx+1}/{len(constraints)}')
+        for constraint_idx, (operator_idx, constraint) in enumerate(
+            quadratic_constraints.items()
+        ):
 
-            # check that either both LHS and RHS are trivial, or neither are
-            lhs_is_empty = term["lhs"] == empty_operator
-            rhs_is_zero = sum(abs(x[0]) for x in term["rhs"]) < self.tol
-            # print(f"constraint_idx = {constraint_idx}, op = {self.operator_list[operator_idx]}, lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
+            # print(f'Building quadratic constraints: {constraint_idx+1}/{len(quadratic_constraints)}')
 
-            if lhs_is_empty != rhs_is_zero:
-                # print(f"lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
-                pass
-                # raise ValueError(
-                #    f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
-                # )
+            lhs = constraint["lhs"]
+            rhs = constraint["rhs"]
 
-            # proceed if both LHS, RHS are not trivial
-            if not lhs_is_empty:
-                linear_constraint_vector = self.single_trace_to_coefficient_vector(
-                    term["lhs"]
-                )
+            # initialize the quadratic constraint matrix
+            linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
+            quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
 
-                # initialize the quadratic constraint matrix
-                quadratic_matrix = np.zeros((self.param_dim, self.param_dim))
+            # worry about symmetrization of quadratic matrix
 
-                # loop over all terms in the RHS (double trace operators)
-                for i in range(len(term["rhs"])):
-                    coeff = term["rhs"][i][0]
-                    if np.abs(coeff) > self.tol:
-                        quadratic_constraint_vector_1 = (
-                            self.single_trace_to_coefficient_vector(term["rhs"][i][1])
-                        )
-                        quadratic_constraint_vector_2 = (
-                            self.single_trace_to_coefficient_vector(term["rhs"][i][2])
-                        )
-                        # build the symmetrized constraint matrix
-                        quadratic_matrix += (
-                            0.5
-                            * coeff
-                            * np.outer(
-                                quadratic_constraint_vector_1,
-                                quadratic_constraint_vector_2,
-                            )
-                        )
-                        quadratic_matrix += (
-                            0.5
-                            * coeff
-                            * np.outer(
-                                quadratic_constraint_vector_2,
-                                quadratic_constraint_vector_1,
-                            )
-                        )
+            # transform to null basis
+            # the minus sign is very important: (-RHS + LHS = 0)
+            linear_constraint_vector = linear_constraint_vector @ null_space_matrix
+            quadratic_matrix = (
+                -null_space_matrix.T @ quadratic_matrix @ null_space_matrix
+            )
 
-                # transform to null basis
-                linear_constraint_vector = np.dot(
-                    linear_constraint_vector, null_space_matrix
-                )
-                quadratic_matrix = np.einsum(
-                    "ia, ij, jb->ab",
-                    null_space_matrix,
-                    quadratic_matrix,
-                    null_space_matrix,
-                )
+            # reshape the (d,d) matrix to a (1,d^2) matrix
+            quadratic_matrix = quadratic_matrix.reshape((1, self.param_dim_null**2))
 
-                linear_is_zero = np.max(np.abs(linear_constraint_vector)) < self.tol
-                quadratic_is_zero = np.max(np.abs(quadratic_matrix)) < self.tol
+            linear_is_zero = np.max(np.abs(linear_constraint_vector)) < self.tol
+            quadratic_is_zero = np.max(np.abs(quadratic_matrix)) < self.tol
 
-                use_old_method = False
-                if use_old_method:
-                    if (not quadratic_is_zero) and (not linear_is_zero):
-                        linear_terms.append(linear_constraint_vector)
-                        quadratic_terms.append(quadratic_matrix)
+            use_old_method = False
+            if use_old_method:
+                if (not quadratic_is_zero) and (not linear_is_zero):
+                    linear_terms.append(linear_constraint_vector)
+                    quadratic_terms.append(quadratic_matrix)
 
-                    if quadratic_is_zero and not linear_is_zero:
-                        print(
-                            f"constraint from operator_idx = {operator_idx} is quadratically trivial."
-                        )
-                    elif not quadratic_is_zero and linear_is_zero:
-                        print(
-                            f"constraint operator_idx = {operator_idx} is linearly trivial."
-                        )
-                else:
-                    if not quadratic_is_zero:
-                        linear_terms.append(linear_constraint_vector)
-                        quadratic_terms.append(quadratic_matrix)
-                    elif not linear_is_zero:
-                        # additional_constraints.append(term["lhs"])
-                        # for some reason I've converted all the constraints to dictionaries at this point
-                        additional_constraints.append(
-                            {op: coeff for op, coeff in term["lhs"]}
-                        )
+                if quadratic_is_zero and not linear_is_zero:
+                    print(
+                        f"constraint from constraint_idx = {constraint_idx} is quadratically trivial."
+                    )
+                elif not quadratic_is_zero and linear_is_zero:
+                    print(
+                        f"constraint constraint_idx = {constraint_idx} is linearly trivial."
+                    )
+            else:
+                if not quadratic_is_zero:
+                    linear_terms.append(csr_matrix(linear_constraint_vector))
+                    quadratic_terms.append(quadratic_matrix)
+                elif not linear_is_zero:
+                    additional_constraints.append(lhs)
 
         if not use_old_method and len(additional_constraints) > 0:
             print(
-                f"Adding {len(additional_constraints)} new constraints and rebuilding null matrix"
+                f"Building quadratic constraints: adding {len(additional_constraints)} new linear constraints and rebuilding null matrix"
             )
             self.build_null_space_matrix(additional_constraints=additional_constraints)
             return self.build_quadratic_constraints()
 
-        # map to numpy arrays
-        # THE MINUS SIGN IS VERY IMPORTANT: (-RHS + LHS = 0)
-        quadratic_terms = -np.asarray(quadratic_terms)
-        linear_terms = np.asarray(linear_terms)
-
-        # check that the quadratic matrix is symmetric
-        if not np.allclose(quadratic_terms, np.einsum("Iab->Iba", quadratic_terms)):
-            raise ValueError("Quadratic matrix not symmetric.")
+        # map to sparse matrices
+        quadratic_terms = vstack(quadratic_terms)
+        linear_terms = vstack(linear_terms)
 
         # apply reduction
         num_constraints = quadratic_terms.shape[0]
+
         print(
             f"Number of quadratic constraints before row reduction: {num_constraints}"
         )
-        quadratic_terms = quadratic_terms.reshape(
-            (num_constraints, self.param_dim_null**2)
-        )
-        stacked_matrix = np.hstack([quadratic_terms, linear_terms])
-        stacked_matrix = get_row_space(stacked_matrix)
+        stacked_matrix = hstack([quadratic_terms, linear_terms])
+        stacked_matrix = get_row_space_sparse(stacked_matrix)
         num_constraints = stacked_matrix.shape[0]
         linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
-        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2].reshape(
-            (num_constraints, self.param_dim_null, self.param_dim_null)
-        )
+        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
 
         return {
@@ -607,7 +538,10 @@ class BootstrapSystem:
         """
         cleaned_constraints = []
         for st_operator in constraints:
-            if all([op in self.operator_list for op in st_operator.data]) and not st_operator.is_zero():
+            if (
+                all([op in self.operator_list for op in st_operator.data])
+                and not st_operator.is_zero()
+            ):
                 cleaned_constraints.append(st_operator)
         return cleaned_constraints
 
