@@ -202,6 +202,32 @@ class DoubleTraceOperator:
         # scrub any + - appearances
         return x.replace("+ -", "-")
 
+    def __mul__(self, other: Number | Self):
+        if isinstance(other, Number):
+            return self.__rmul__(other)
+        raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
+
+    def __rmul__(self, other: Number):
+        if isinstance(other, Number):
+            new_data = {op: other * coeff for op, coeff in self}
+            return self.__class__(data=new_data)
+        else:
+            raise ValueError("Warning, right multiplication only valid for numbers")
+
+    def __add__(self, other: Self) -> Self:
+        if not isinstance(other, self.__class__):
+            raise ValueError(f"Cannot add {type(other)} and {self.__class__.__name__}")
+        new_data = self.data.copy()
+        for op, coeff in other:
+            new_data[op] = new_data.get(op, 0) + coeff
+        return self.__class__(data=new_data)
+
+    def is_zero(self) -> bool:
+        if self.data == {}:
+            return True
+        else:
+            return False
+
     def get_single_trace_component(self) -> SingleTraceOperator:
         """
         A double trace operator can "contain" a single trace component once the
