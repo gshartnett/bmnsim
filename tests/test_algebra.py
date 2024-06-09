@@ -28,6 +28,7 @@ def test_single_trace_commutator_onematrix():
         commutation_rules_concise={
             ("P", "X"): -1j,
         },
+        hermitian_dict={"P": True, "X": True},
     )
     OP1 = SingleTraceOperator(data={("X", "P"): 1})
     OP2 = SingleTraceOperator(
@@ -57,3 +58,20 @@ def test_zero_single_trace_operator():
 
     # zero * zero
     # assert SingleTraceOperator(data={("X"): 0}) * SingleTraceOperator(data={("P", "P"): 0}) == zero
+
+
+def test_zero_double_trace_operator():
+    """
+    Test edge cases involving the zero operator
+    """
+    zero = SingleTraceOperator(data={(): 0})
+    assert zero * zero == zero
+
+
+def test_single_trace_component_of_double_trace():
+    op = SingleTraceOperator(
+        data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): 7}
+    )
+    one = SingleTraceOperator(data={(): 1})
+    assert (one * op).get_single_trace_component() == op
+    assert (op * one).get_single_trace_component() == op

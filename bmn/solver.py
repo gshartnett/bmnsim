@@ -270,8 +270,8 @@ def get_quadratic_constraint_vector(
 def minimize(
     bootstrap,
     op,
-    #init=None,
-    init_scale = 1.0,
+    # init=None,
+    init_scale=1.0,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
     eps=5e-4,
@@ -306,13 +306,13 @@ def minimize(
     print(f"Initializing randomly")
     init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
 
-    #print(f"Initializing from all 1's")
-    #init = np.ones(shape=bootstrap.param_dim_null)
+    # print(f"Initializing from all 1's")
+    # init = np.ones(shape=bootstrap.param_dim_null)
 
-    #print(f"Initializing from all 0's")
-    #init = np.zeros(shape=bootstrap.param_dim_null)
+    # print(f"Initializing from all 0's")
+    # init = np.zeros(shape=bootstrap.param_dim_null)
 
-    init = bootstrap.scale_param_to_enforce_normalization(init) # rescale to normalize
+    init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
@@ -356,7 +356,7 @@ def minimize(
     else:
         debug("Starting from scratch...")
         # find an initial parameter close to init that makes all bootstrap matrices positive
-        #print(f"INSIDE SOLVER, param_dim_null = {bootstrap.param_dim_null}, {A_op.shape, b_op.shape, init.shape}")
+        # print(f"INSIDE SOLVER, param_dim_null = {bootstrap.param_dim_null}, {A_op.shape, b_op.shape, init.shape}")
         param = sdp_init(
             bootstrap_array_sparse=bootstrap_array_sparse,
             A=A_op,

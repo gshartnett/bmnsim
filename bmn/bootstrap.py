@@ -1,6 +1,9 @@
 from collections import Counter
 from itertools import product
-from typing import Union, Optional
+from typing import (
+    Optional,
+    Union,
+)
 
 import numpy as np
 from scipy.sparse import (
@@ -119,7 +122,9 @@ class BootstrapSystem:
         np.ndarray
             The rescaled param.
         """
-        vec = self.single_trace_to_coefficient_vector(SingleTraceOperator(data={(): 1}), return_null_basis=True)
+        vec = self.single_trace_to_coefficient_vector(
+            SingleTraceOperator(data={(): 1}), return_null_basis=True
+        )
         return param / vec.dot(param)
 
     def build_null_space_matrix(
@@ -249,7 +254,7 @@ class BootstrapSystem:
         constraints = []
         for op in self.operator_list:
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
-            #constraints.append((MatrixOperator(data={op: 1}) * self.gauge).trace()) # doesn't seem to add any constraintss
+            # constraints.append((MatrixOperator(data={op: 1}) * self.gauge).trace()) # doesn't seem to add any constraintss
         return self.clean_constraints(constraints)
 
     def generate_odd_degree_vanish_constraints(self) -> list[SingleTraceOperator]:
@@ -302,9 +307,9 @@ class BootstrapSystem:
                     st_operator_2 = SingleTraceOperator(data={tuple(op[k + 1 :]): 1})
 
                     # If the double trace term involves <tr(1)> simplify and add to the linear, LHS
-                    if (st_operator_1 == identity):
+                    if st_operator_1 == identity:
                         eq_lhs -= commutator * st_operator_2
-                    elif (st_operator_2 == identity):
+                    elif st_operator_2 == identity:
                         eq_lhs -= commutator * st_operator_1
                     else:
                         eq_rhs.append(
@@ -394,7 +399,7 @@ class BootstrapSystem:
         # build the index-value dict
         index_value_dict = {}
         for idx_constraint, constraint_dict in enumerate(self.constraints):
-            #print(type(constraint_dict), constraint_dict)
+            # print(type(constraint_dict), constraint_dict)
             for op, coeff in constraint_dict.items():
                 index_value_dict[(idx_constraint, self.operator_dict[op])] = coeff
 
@@ -438,19 +443,19 @@ class BootstrapSystem:
 
         # loop over constraints
         for constraint_idx, (operator_idx, term) in enumerate(constraints.items()):
-            #print(f'Building quadratic constraints: {constraint_idx+1}/{len(constraints)}')
+            # print(f'Building quadratic constraints: {constraint_idx+1}/{len(constraints)}')
 
             # check that either both LHS and RHS are trivial, or neither are
             lhs_is_empty = term["lhs"] == empty_operator
             rhs_is_zero = sum(abs(x[0]) for x in term["rhs"]) < self.tol
-            #print(f"constraint_idx = {constraint_idx}, op = {self.operator_list[operator_idx]}, lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
+            # print(f"constraint_idx = {constraint_idx}, op = {self.operator_list[operator_idx]}, lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
 
             if lhs_is_empty != rhs_is_zero:
-                #print(f"lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
+                # print(f"lhs_is_empty = {lhs_is_empty}, rhs_is_zero = {rhs_is_zero}\n")
                 pass
-                #raise ValueError(
+                # raise ValueError(
                 #    f"Warning, only one of (LHS, RHS) is trivial for quadratic constraint {constraint_idx}."
-                #)
+                # )
 
             # proceed if both LHS, RHS are not trivial
             if not lhs_is_empty:
@@ -522,12 +527,16 @@ class BootstrapSystem:
                         linear_terms.append(linear_constraint_vector)
                         quadratic_terms.append(quadratic_matrix)
                     elif not linear_is_zero:
-                        #additional_constraints.append(term["lhs"])
+                        # additional_constraints.append(term["lhs"])
                         # for some reason I've converted all the constraints to dictionaries at this point
-                        additional_constraints.append({op: coeff for op, coeff in term["lhs"]})
+                        additional_constraints.append(
+                            {op: coeff for op, coeff in term["lhs"]}
+                        )
 
         if not use_old_method and len(additional_constraints) > 0:
-            print(f"Adding {len(additional_constraints)} new constraints and rebuilding null matrix")
+            print(
+                f"Adding {len(additional_constraints)} new constraints and rebuilding null matrix"
+            )
             self.build_null_space_matrix(additional_constraints=additional_constraints)
             return self.build_quadratic_constraints()
 
@@ -542,13 +551,19 @@ class BootstrapSystem:
 
         # apply reduction
         num_constraints = quadratic_terms.shape[0]
-        print(f"Number of quadratic constraints before row reduction: {num_constraints}")
-        quadratic_terms = quadratic_terms.reshape((num_constraints, self.param_dim_null**2))
+        print(
+            f"Number of quadratic constraints before row reduction: {num_constraints}"
+        )
+        quadratic_terms = quadratic_terms.reshape(
+            (num_constraints, self.param_dim_null**2)
+        )
         stacked_matrix = np.hstack([quadratic_terms, linear_terms])
         stacked_matrix = get_row_space(stacked_matrix)
         num_constraints = stacked_matrix.shape[0]
-        linear_terms = stacked_matrix[:,  self.param_dim_null**2:]
-        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2].reshape((num_constraints, self.param_dim_null, self.param_dim_null))
+        linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
+        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2].reshape(
+            (num_constraints, self.param_dim_null, self.param_dim_null)
+        )
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
 
         return {

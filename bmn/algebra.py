@@ -6,6 +6,8 @@ from typing import (
 
 import numpy as np
 
+TOL = 1e-12
+
 
 class MatrixOperator:
     """
@@ -16,7 +18,7 @@ class MatrixOperator:
     build some unit tests to check the basic operation
     """
 
-    def __init__(self, data: dict[tuple : list[Number]], tol: float = 1e-10):
+    def __init__(self, data: dict[tuple : list[Number]], tol: float = TOL):
         self.tol = tol
         self.data = {}
         for op, coeff in data.items():
@@ -121,92 +123,104 @@ class MatrixOperator:
 
 class SingleTraceOperator(MatrixOperator):
     """
-    Single trace operator.
-    TODO consider adding an __iter__/making it a generator
+    Single trace operator class.
     """
 
     def __str__(self) -> str:
         x = ""
         for idx, (coeff, op) in enumerate(zip(self.coeffs, self.operators)):
-            op_str = ''.join(op)
-            x += f"{coeff}" + f" < tr {op_str} >"
+            op_str = "".join(op)
+            x += f"{coeff}" + f" <tr({op_str})>"
+
+            # add +/- for all but the final term
             if idx != len(self.operators) - 1:
                 x += " + "
-        return x
 
-    def __mul__(self, other: Number):
-        if not isinstance(other, Number):
-            raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
+        # scrub any + - appearances
+        return x.replace("+ -", "-")
+
+    def __mul__(self, other: Number | Self):
         if isinstance(other, Number):
             return self.__rmul__(other)
-        """
-        # loop over all terms
-        for op1, coeff1 in self.data.items():
-            for op2, coeff2 in self.data.items():
+        if isinstance(other, self.__class__):
 
-        # special case when either self or other is proportional to identity
-        if self.max_degree == 0:
-            # zero operator
-            if self.coeffs == []:
-                return 0 * SingleTraceOperator(data = {k: v for k, v in other.data.items()})
-            return self.coeffs[0] * SingleTraceOperator(data = {k: v for k, v in other.data.items()})
-        if other.max_degree == 0:
-            if other.coeffs == []:
-                return 0 * SingleTraceOperator(data = {k: v for k, v in self.data.items()})
-            return other.coeffs[0] * SingleTraceOperator(data = {k: v for k, v in self.data.items()})
+            data = {}
+            for op1, coeff1 in self:
+                for op2, coeff2 in other:
+                    if np.abs(coeff1 * coeff2) > self.tol:
+                        data[(op1, op2)] = data.get((op1, op2), 0) + coeff1 * coeff2
 
-        return DoubleTraceOperator(
-            op1=SingleTraceOperator(data={k: v for k, v in self.data.items()}),
-            op2=SingleTraceOperator(data={k: v for k, v in other.data.items()}),
-        )
-        """
+            # edge case: 0
+            if data == {}:
+                return self.__class__(data={(): 0})
+
+            return DoubleTraceOperator(data=data)
+
+        raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
 
 
-"""
 class DoubleTraceOperator:
-    def __init__(self, operator1: SingleTraceOperator, operator2: SingleTraceOperator):
+    """
+    Double trace operator class.
 
-        # zero
-        if len(operator1) * len(operator2) == 0:
-            return SingleTraceOperator(data={():0})
+    Note that while sums of single trace operators are also single trace operators, e.g.,
+        <tr(A)> + <tr(B)> = <tr(A+B)>,
+    the same is not true for double trace operators. Therefore, this class should be
+    understood as linear combinations of double trace operators.
 
-        #self.data = {}
-        #for op1, coeff1 in operator1.data.items():
-        #    for op2, coeff2 in operator2.data.items():
-        #        self.data[(op1, op2)] = coeff1 * coeff2
-        if not (len(op1) == 1 and len(op2) == 1):
-            raise ValueError("Each SingleTraceOperator must have deg <=1.")
+    Also, this class is not intended to be instantiated directly. The intended use case
+    is to allow a convenient data structure for the product of two single trace operators,
+        st_op1 * st_op2.
+    """
 
-        self.coeff = op1.coeffs[0] * op2.coeffs[0]
-        self.op1 = op1.operators[0]
-        self.op2 = op2.operators[0]
+    def __init__(self, data: dict[tuple[tuple] : list[Number]], tol: float = TOL):
+        self.tol = tol
+        self.data = {}
+        for (op1, op2), coeff in data.items():
+            if np.abs(coeff) > self.tol:
+                self.data[(op1, op2)] = coeff
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def __iter__(self):
+        for key, value in self.data.items():
+            yield key, value
 
     def __repr__(self) -> str:
-         return f"{self.__class__.__name__}(op1={self.op1!r}, op2={self.op2!r}, coeff={self.coeff!r})"
+        return f"{self.__class__.__name__}(data={self.data})"
 
     def __str__(self) -> str:
-        x = "("
-        for idx, (coeff, op) in enumerate(
-            zip(self.data[0].coeffs, self.data[0].operators)
-        ):
-            x += f"{coeff}" + f" tr {op}"
-            if idx != len(self.data[0].operators) - 1:
+        x = ""
+        for idx, ((op1, op2), coeff) in enumerate(self):
+            op1_str = "".join(op1)
+            op2_str = "".join(op2)
+            x += f"{coeff}" + f" <tr({op1_str})tr({op2_str})>"
+            if idx != len(self) - 1:
                 x += " + "
-            else:
-                x += ")"
 
-        x += " * ("
+        # scrub any + - appearances
+        return x.replace("+ -", "-")
 
-        for idx, (coeff, op) in enumerate(
-            zip(self.data[1].coeffs, self.data[1].operators)
-        ):
-            x += f"{coeff}" + f" tr {op}"
-            if idx != len(self.data[1].operators) - 1:
-                x += " + "
-            else:
-                x += ")"
-        return x
-"""
+    def get_single_trace_component(self) -> SingleTraceOperator:
+        """
+        A double trace operator can "contain" a single trace component once the
+        noramlization condition <tr(1)>^2 = <tr(1)> is invoked.
+
+        We could go even further and demand that <tr(1)>=1, but we will not do that.
+
+        Returns
+        -------
+        SingleTraceOperator
+            The single trace component.
+        """
+        data = {}
+        for (op1, op2), coeff in self:
+            if op1 == ():
+                data[op2] = coeff
+            elif op2 == ():
+                data[op1] = coeff
+        return SingleTraceOperator(data=data)
 
 
 class MatrixSystem:
