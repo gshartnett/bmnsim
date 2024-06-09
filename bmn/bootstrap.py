@@ -15,6 +15,7 @@ from bmn.algebra import (
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
+    DoubleTraceOperator,
 )
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
@@ -88,7 +89,7 @@ class BootstrapSystem:
         self.tol = tol
         self.null_space_matrix = None
         self._validate()
-        self.constraints = None
+        self.linear_constraints = None
 
     def _validate(self):
         """
@@ -286,13 +287,22 @@ class BootstrapSystem:
                 constraints.append(st_operator - st_operator_dagger)
         return self.clean_constraints(constraints)
 
-    def generate_cyclic_constraints(self) -> list[SingleTraceOperator]:
-        # TODO it might be nice to implement this using a DoubleTraceOperator class
-        # I definitely don't like how it is impelemented now
+    def generate_cyclic_constraints(self) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
+        """
+        Generate cyclic constraints relating single trace operators to double
+        trace operators. See S37 of
+        https://journals.aps.org/prl/supplemental/10.1103/PhysRevLett.125.041601/supp.pdf
+
+        Returns
+        -------
+        dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]
+            The linear and quadratic constraints.
+        """
         identity = SingleTraceOperator(data={(): 1})
-        constraints = {}
+        quadratic_constraints = {}
+        linear_constraints = {}
         for idx, op in enumerate(self.operator_list):
-            if len(op) > 1:
+            if len(op) > 1: # TODO check this...
                 assert isinstance(op, tuple)
                 # the LHS corresponds to single trace operators
                 eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
@@ -300,7 +310,8 @@ class BootstrapSystem:
                 )
 
                 # rhe RHS corresponds to double trace operators
-                eq_rhs = []
+                #eq_rhs = []
+                eq_rhs = DoubleTraceOperator(data={})
                 for k in range(1, len(op)):
                     commutator = self.matrix_system.commutation_rules[(op[0], op[k])]
                     st_operator_1 = SingleTraceOperator(data={tuple(op[1:k]): 1})
@@ -312,49 +323,47 @@ class BootstrapSystem:
                     elif st_operator_2 == identity:
                         eq_lhs -= commutator * st_operator_1
                     else:
-                        eq_rhs.append(
-                            [
-                                commutator,
-                                SingleTraceOperator(data={tuple(op[1:k]): 1}),
-                                SingleTraceOperator(data={tuple(op[k + 1 :]): 1}),
-                            ]
-                        )
+                        eq_rhs += commutator * (st_operator_1 * st_operator_2)
 
-                constraints[idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
-        return constraints
+                # if the quadratic term vanishes but the linear term is non-zero, record the constraint as being linear
+                if not eq_lhs.is_zero() and eq_rhs.is_zero():
+                    linear_constraints[idx] = eq_lhs
 
-    def generate_all_linear_constraints(self) -> list[dict[str, float]]:
+                # do not expect to find any constraints where the linear term vanishes but the quadratic term does not
+                elif eq_lhs.is_zero() and not eq_rhs.is_zero():
+                    raise ValueError(f"Warning, for operator index {idx}, op={op}, the LHS is unexpectedly 0")
+
+                # record proper quadratic constraints
+                elif not eq_lhs.is_zero():
+                    quadratic_constraints[idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
+
+        return linear_constraints, quadratic_constraints
+
+    def generate_constraints(self) -> list[dict[str, float]]:
         """
-        Generate all linear constraints.
+        Generate all constraints.
 
         Returns
         -------
         list[dict[str, float]]
             The list of linear constraints, with each one expressed as a dictionary.
         """
-        empty_operator = SingleTraceOperator(data={(): 0})
-        constraints = []
+        linear_constraints = []
 
         # Hamiltonian constraints
         hamiltonian_constraints = self.generate_hamiltonian_constraints()
         print(f"generated {len(hamiltonian_constraints)} Hamiltonian constraints")
-        for st_operator in hamiltonian_constraints:
-            if st_operator != empty_operator:
-                constraints.append({op: coeff for op, coeff in st_operator})
+        linear_constraints.extend(hamiltonian_constraints)
 
         # gauge constraints
         gauge_constraints = self.generate_gauge_constraints()
         print(f"generated {len(gauge_constraints)} gauge constraints")
-        for st_operator in gauge_constraints:
-            if st_operator != empty_operator:
-                constraints.append({op: coeff for op, coeff in st_operator})
+        linear_constraints.extend(gauge_constraints)
 
         # reality constraints
         reality_constraints = self.generate_reality_constraints()
         print(f"generated {len(reality_constraints)} reality constraints")
-        for st_operator in reality_constraints:
-            if st_operator != empty_operator:
-                constraints.append({op: coeff for op, coeff in st_operator})
+        linear_constraints.extend(reality_constraints)
 
         # odd degree vanish
         if self.odd_degree_vanish:
@@ -362,11 +371,20 @@ class BootstrapSystem:
             print(
                 f"generated {len(odd_degree_constraints)} odd degree vanish constraints"
             )
-            for st_operator in odd_degree_constraints:
-                if st_operator != empty_operator:
-                    constraints.append({op: coeff for op, coeff in st_operator})
+        linear_constraints.extend(odd_degree_constraints)
 
-        return constraints
+        # cyclic constraints
+        cyclic_linear, cyclic_quadratic = self.generate_cyclic_constraints()
+        cyclic_linear = list(cyclic_linear.values())
+        print(
+            f"generated {len(cyclic_linear)} linear cyclic constraints"
+        )
+        print(
+            f"generated {len(cyclic_quadratic)} quadratic cyclic constraints"
+        )
+        linear_constraints.extend(cyclic_linear)
+
+        return linear_constraints, cyclic_quadratic
 
     def build_linear_constraints(
         self, additional_constraints: Optional[list[SingleTraceOperator]] = None
@@ -389,8 +407,8 @@ class BootstrapSystem:
             The set of linear constraints.
         """
         # grab the constraints, building them if necessary
-        if self.constraints is None:
-            self.constraints = self.generate_all_linear_constraints()
+        if self.linear_constraints is None:
+            self.linear_constraints = self.generate_constraints()[0]
 
         # add the additional constraints
         if additional_constraints is not None:
@@ -398,15 +416,14 @@ class BootstrapSystem:
 
         # build the index-value dict
         index_value_dict = {}
-        for idx_constraint, constraint_dict in enumerate(self.constraints):
-            # print(type(constraint_dict), constraint_dict)
-            for op, coeff in constraint_dict.items():
+        for idx_constraint, st_operator in enumerate(self.linear_constraints):
+            for op, coeff in st_operator:
                 index_value_dict[(idx_constraint, self.operator_dict[op])] = coeff
 
         # return the constraint matrix
         return create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
-            matrix_shape=(len(self.constraints), len(self.operator_list)),
+            matrix_shape=(len(self.linear_constraints), len(self.operator_list)),
         )
 
     def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
@@ -576,6 +593,7 @@ class BootstrapSystem:
     ) -> list[SingleTraceOperator]:
         """
         Remove constraints that involve operators outside the operator list.
+        Also remove empty constraints of the form 0=0.
 
         Parameters
         ----------
@@ -589,7 +607,7 @@ class BootstrapSystem:
         """
         cleaned_constraints = []
         for st_operator in constraints:
-            if all([op in self.operator_list for op in st_operator.data]):
+            if all([op in self.operator_list for op in st_operator.data]) and not st_operator.is_zero():
                 cleaned_constraints.append(st_operator)
         return cleaned_constraints
 

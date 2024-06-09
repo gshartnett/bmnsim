@@ -9,50 +9,19 @@ import numpy as np
 TOL = 1e-12
 
 
-class MatrixOperator:
+class AbstractMatrixOperator:
     """
-    Class for un-traced matrix operators.
-
-    TODO
-    What about case of constant or zero operator?
-    build some unit tests to check the basic operation
+    Abstract matrix operator class.
     """
-
-    def __init__(self, data: dict[tuple : list[Number]], tol: float = TOL):
-        self.tol = tol
-        self.data = {}
-        for op, coeff in data.items():
-            if np.abs(coeff) > self.tol:
-                if isinstance(op, tuple):
-                    self.data[op] = coeff
-                elif isinstance(op, str):
-                    self.data[(op,)] = coeff
-                else:
-                    raise ValueError(
-                        "All operators must be tuples of strings, e.g. (X, Y, P)."
-                    )
-        self.operators = list(self.data.keys())
-        self.coeffs = list(self.data.values())
-        self.degrees = [len(op) for op in self.operators]
-        if self.degrees == []:
-            self.max_degree = 0
-        else:
-            self.max_degree = max(self.degrees)
+    def __init__(self):
+        raise NotImplementedError()
 
     def __iter__(self):
         for key, value in self.data.items():
             yield key, value
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(operators={self.operators!r}, coeff={self.coeffs!r})"
-
-    def __str__(self) -> str:
-        x = ""
-        for idx, (coeff, op) in enumerate(zip(self.coeffs, self.operators)):
-            x += f"{coeff}" + f" {op}"
-            if idx != len(self.operators) - 1:
-                x += " + "
-        return x
+        return f"{self.__class__.__name__}(data={self.data})"
 
     def copy(self):
         return self.__class__(data={k: v for k, v in self})
@@ -82,6 +51,62 @@ class MatrixOperator:
         else:
             raise ValueError("Warning, right multiplication only valid for numbers")
 
+    def __mul__(self):
+        raise NotImplementedError()
+
+    def __eq__(self, other: Self) -> bool:
+        if not isinstance(other, type(self)):
+            return False
+        return self.data == {k: v for k, v in other}
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def is_zero(self) -> bool:
+        if self.data == {}:
+            return True
+        else:
+            return False
+
+
+class MatrixOperator(AbstractMatrixOperator):
+    """
+    Class for un-traced matrix operators.
+
+    TODO
+    What about case of constant or zero operator?
+    build some unit tests to check the basic operation
+    """
+
+    def __init__(self, data: dict[tuple : list[Number]], tol: float = TOL):
+        self.tol = tol
+        self.data = {}
+        for op, coeff in data.items():
+            if np.abs(coeff) > self.tol:
+                if isinstance(op, tuple):
+                    self.data[op] = coeff
+                elif isinstance(op, str):
+                    self.data[(op,)] = coeff
+                else:
+                    raise ValueError(
+                        "All operators must be tuples of strings, e.g. (X, Y, P)."
+                    )
+        self.operators = list(self.data.keys())
+        self.coeffs = list(self.data.values())
+        self.degrees = [len(op) for op in self.operators]
+        if self.degrees == []:
+            self.max_degree = 0
+        else:
+            self.max_degree = max(self.degrees)
+
+    def __str__(self) -> str:
+        x = ""
+        for idx, (coeff, op) in enumerate(zip(self.coeffs, self.operators)):
+            x += f"{coeff}" + f" {op}"
+            if idx != len(self.operators) - 1:
+                x += " + "
+        return x
+
     def __mul__(self, other: Union[Self, Number]):
         if not isinstance(other, (Number, self.__class__)):
             raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
@@ -108,14 +133,6 @@ class MatrixOperator:
             return self
         else:
             return self * self.__pow__(power - 1)
-
-    def __eq__(self, other: Self) -> bool:
-        if not isinstance(other, type(self)):
-            return False
-        return self.data == {k: v for k, v in other}
-
-    def __len__(self) -> int:
-        return len(self.data)
 
     def trace(self):
         return SingleTraceOperator(data={k: v for k, v in self})
@@ -159,7 +176,7 @@ class SingleTraceOperator(MatrixOperator):
         raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
 
 
-class DoubleTraceOperator:
+class DoubleTraceOperator(AbstractMatrixOperator):
     """
     Double trace operator class.
 
@@ -180,16 +197,6 @@ class DoubleTraceOperator:
             if np.abs(coeff) > self.tol:
                 self.data[(op1, op2)] = coeff
 
-    def __len__(self) -> int:
-        return len(self.data)
-
-    def __iter__(self):
-        for key, value in self.data.items():
-            yield key, value
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(data={self.data})"
-
     def __str__(self) -> str:
         x = ""
         for idx, ((op1, op2), coeff) in enumerate(self):
@@ -201,32 +208,6 @@ class DoubleTraceOperator:
 
         # scrub any + - appearances
         return x.replace("+ -", "-")
-
-    def __mul__(self, other: Number | Self):
-        if isinstance(other, Number):
-            return self.__rmul__(other)
-        raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
-
-    def __rmul__(self, other: Number):
-        if isinstance(other, Number):
-            new_data = {op: other * coeff for op, coeff in self}
-            return self.__class__(data=new_data)
-        else:
-            raise ValueError("Warning, right multiplication only valid for numbers")
-
-    def __add__(self, other: Self) -> Self:
-        if not isinstance(other, self.__class__):
-            raise ValueError(f"Cannot add {type(other)} and {self.__class__.__name__}")
-        new_data = self.data.copy()
-        for op, coeff in other:
-            new_data[op] = new_data.get(op, 0) + coeff
-        return self.__class__(data=new_data)
-
-    def is_zero(self) -> bool:
-        if self.data == {}:
-            return True
-        else:
-            return False
 
     def get_single_trace_component(self) -> SingleTraceOperator:
         """
