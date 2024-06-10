@@ -142,6 +142,7 @@ class MatrixOperator(AbstractMatrixOperator):
 class SingleTraceOperator(MatrixOperator):
     """
     Single trace operator class.
+    Note that technically this is not an operator, it is an expectation value of an operator.
     """
 
     def __str__(self) -> str:
@@ -180,6 +181,8 @@ class SingleTraceOperator(MatrixOperator):
 class DoubleTraceOperator(AbstractMatrixOperator):
     """
     Double trace operator class.
+
+    Note that technically this is not an operator, it is an expectation value of an operator.
 
     Note that while sums of single trace operators are also single trace operators, e.g.,
         <tr(A)> + <tr(B)> = <tr(A+B)>,

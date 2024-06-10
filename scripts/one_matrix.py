@@ -9,8 +9,8 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
 
-g = 1.4
-L = 3
+g = 2
+L = 5
 
 matrix_system = MatrixSystem(
     # operator_basis=['X', 'P'],

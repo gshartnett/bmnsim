@@ -217,6 +217,13 @@ class BootstrapSystem:
                     st_operator2=SingleTraceOperator(data={op: 1}),
                 )
             )
+
+            constraints.append(
+                self.matrix_system.single_trace_commutator(
+                    st_operator1=SingleTraceOperator(data={op: 1}),
+                    st_operator2=self.hamiltonian,
+                )
+            )
         return self.clean_constraints(constraints)
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:
@@ -233,7 +240,6 @@ class BootstrapSystem:
         constraints = []
         for op in self.operator_list:
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
-            # constraints.append((MatrixOperator(data={op: 1}) * self.gauge).trace()) # doesn't seem to add any constraintss
         return self.clean_constraints(constraints)
 
     def generate_odd_degree_vanish_constraints(self) -> list[SingleTraceOperator]:
@@ -362,6 +368,9 @@ class BootstrapSystem:
         print(f"Generated {len(cyclic_quadratic)} quadratic cyclic constraints")
         linear_constraints.extend(cyclic_linear)
 
+        # NOTE pretty sure this is not necessary
+        linear_constraints.extend([self.matrix_system.hermitian_conjugate(op) for op in linear_constraints])
+
         return linear_constraints, cyclic_quadratic
 
     def build_linear_constraints(
@@ -444,8 +453,6 @@ class BootstrapSystem:
         for constraint_idx, (operator_idx, constraint) in enumerate(
             quadratic_constraints.items()
         ):
-
-            # print(f'Building quadratic constraints: {constraint_idx+1}/{len(quadratic_constraints)}')
 
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
