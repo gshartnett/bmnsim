@@ -210,6 +210,8 @@ class BootstrapSystem:
             The list of constraint terms.
         """
         constraints = []
+
+        '''
         for op in self.operator_list:
             constraints.append(
                 self.matrix_system.single_trace_commutator(
@@ -217,13 +219,26 @@ class BootstrapSystem:
                     st_operator2=SingleTraceOperator(data={op: 1}),
                 )
             )
+        '''
 
+        '''
+        for op in self.operator_list:
             constraints.append(
-                self.matrix_system.single_trace_commutator(
+                self.matrix_system.single_trace_commutator2(
+                    st_operator1=self.hamiltonian,
+                    st_operator2=SingleTraceOperator(data={op: 1}),
+                )
+            )
+        '''
+
+        for op in self.operator_list:
+            constraints.append(
+                self.matrix_system.single_trace_commutator2(
                     st_operator1=SingleTraceOperator(data={op: 1}),
                     st_operator2=self.hamiltonian,
                 )
             )
+
         return self.clean_constraints(constraints)
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:
@@ -369,7 +384,9 @@ class BootstrapSystem:
         linear_constraints.extend(cyclic_linear)
 
         # NOTE pretty sure this is not necessary
-        linear_constraints.extend([self.matrix_system.hermitian_conjugate(op) for op in linear_constraints])
+        linear_constraints.extend(
+            [self.matrix_system.hermitian_conjugate(op) for op in linear_constraints]
+        )
 
         return linear_constraints, cyclic_quadratic
 
@@ -497,14 +514,18 @@ class BootstrapSystem:
                 elif not linear_is_zero:
                     additional_constraints.append(lhs)
 
+        '''
         if not use_old_method and len(additional_constraints) > 0:
             print(
                 f"Building quadratic constraints: adding {len(additional_constraints)} new linear constraints and rebuilding null matrix"
             )
             self.build_null_space_matrix(additional_constraints=additional_constraints)
             return self.build_quadratic_constraints()
+        '''
 
         # map to sparse matrices
+        print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
+        print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
         quadratic_terms = vstack(quadratic_terms)
         linear_terms = vstack(linear_terms)
 

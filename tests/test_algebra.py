@@ -37,6 +37,9 @@ def test_single_trace_commutator_onematrix():
     assert matrix_system.single_trace_commutator(OP1, OP2) == SingleTraceOperator(
         data={("P", "P"): 2j, ("X", "X"): -2j, ("X", "X", "X", "X"): -4 * 7j}
     )
+    assert matrix_system.single_trace_commutator2(OP1, OP2) == SingleTraceOperator(
+        data={("P", "P"): 2j, ("X", "X"): -2j, ("X", "X", "X", "X"): -4 * 7j}
+    )
 
 
 def test_single_trace_commutator_twomatrix():
@@ -87,6 +90,7 @@ def test_single_trace_commutator_twomatrix():
     )
 
     assert matrix_system.single_trace_commutator(hamiltonian, S2) == commutator
+   # assert matrix_system.single_trace_commutator2(S2, hamiltonian) == commutator
 
 
 def test_zero_single_trace_operator():
@@ -116,27 +120,3 @@ def test_single_trace_component_of_double_trace():
     one = SingleTraceOperator(data={(): 1})
     assert (one * op).get_single_trace_component() == op
     assert (op * one).get_single_trace_component() == op
-
-
-def test_commutation():
-    """
-    Test the commutation of single trace operators using one of the examples in Han et al:
-    See: https://github.com/hanxzh94/matrix-bootstrap/blob/b16d407ae2c7436e2f17a00fb92427d10b94012d/trace.py#L204
-    """
-    matrix_system = MatrixSystem(
-        operator_basis=["P1", "X1", "P2", "X2"],
-        commutation_rules_concise={
-            ("P1", "X1"): -1j,
-            ("P2", "X2"): -1j,
-        },
-        hermitian_dict={"P1": True, "X1": True, "P2": True, "X2": True},
-    )
-    hamiltonian = SingleTraceOperator(
-        data={("P1", "P1"): 1, ("X1", "X1"): 1, ("P2", "P2"): 1, ("X2", "X2"): 1}
-    )
-    S2 = SingleTraceOperator(data={("X1", "P2"): 1, ("X2", "P1"): -1})
-    assert matrix_system.single_trace_commutator(
-        hamiltonian, S2
-    ) == SingleTraceOperator(
-        data={("P1", "P2"): -2j, ("X2", "X1"): -2j, ("P2", "P1"): 2j, ("X1", "X2"): 2j}
-    )

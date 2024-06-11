@@ -267,14 +267,6 @@ class MatrixSystem:
             )
             data[reversed_op] = (-1) ** num_antihermitian * np.conjugate(coeff)
         return operator.__class__(data=data)
-        """
-        return self.__class__(
-            data={
-                op[::-1]: np.conjugate(coeff)
-                for op, coeff in self
-            }
-        )
-        """
 
     def build_commutation_rules(self, commutation_rules_concise):
         """
@@ -346,5 +338,105 @@ class MatrixSystem:
                             + op2[variable2_idx + 1 :]
                         )
                         new_data[new_term] = new_data.get(new_term, 0) + new_coeff
+
+        return SingleTraceOperator(data=new_data)
+
+    def single_trace_commutator2(
+        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator
+    ) -> SingleTraceOperator:
+        """
+        Compute the commutator of two single trace operators. Used to
+        compute the Hamiltonian constraints.
+
+        For two monomial-type terms, such as
+            O1 = tr(ABC), O2 = tr(DEF),
+        the commutator [O1, O2] is calculated by first commuting the last
+        element of the first term (C) to the end of the string. Then the
+        2nd-to-last element of the first term is commuted to the
+        second-to-last position in the string, and so on.
+
+        For example, take the string ABCDEF. This becomes
+        ABCDEF
+        = ABDCEF + AB[C,D]EF
+        = ABDECF + ABD[C,E]F + ...
+        = ABDEFC + ABDE[C,F] + ...
+        = ADBEFC + A[B,D]EFC + ...
+        = ADEBFC + AD[B,E]FC + ...
+        = ADEFBC + ADE[B,F]C + ...
+        = DAEFBC + [A,D]EFBC + ...
+        = DEAFBC + D[A,E]FBC + ...
+        = DEFABC + DE[A,F]BC + ...
+
+        (the dots denote the previously indicated commutator terms).
+
+        Collecting the commutator terms, we have therefore that
+        [ABC, DEF] = AB[C,D]EF + ... + DE[A,F]BC.
+
+        Next, the working out the gauge indices, it's easy to see that
+        the commutator converts the entire expression to be single trace,
+        for example, AB[C,D]EF should be interpreted propto tr(ABEF).
+
+        Finally, note that while the commutator is anti-symmetric,
+        [A, B] = -[B, A], the symbolic expression worked out is not anti-symmetric.
+
+        Parameters
+        ----------
+        st_operator1 : SingleTraceOperator
+            _description_
+        st_operator2 : SingleTraceOperator
+            _description_
+
+        Returns
+        -------
+        SingleTraceOperator
+            The commutator
+        """
+        new_data = {}
+
+        # loop over each individual term in both operators
+        for op1, coeff1 in st_operator1:
+            for op2, coeff2 in st_operator2:
+
+                # To calculate the commutator of a single term, such as [tr(XP), tr(PP)],
+                # create a combined list like so: [(0, X), (1, P), (2, P), (3, P)].
+                # This list will be manipulated in-place in the following.
+                combined_list = [(i, v) for i, v in enumerate(op1)] + [
+                    (i + len(op1), v) for i, v in enumerate(op2)
+                ]
+
+                # Iterate over each element of op1
+                for i in range(len(op1)):
+                    # Move the current element of op1 past all elements of op2
+                    for j in range(len(op1) + len(op2) - 1):
+                        # If the current element is part of op1 and the next element is part of op2, swap them
+                        if (
+                            j < len(combined_list) - 1
+                            and combined_list[j][0] < len(op1)
+                            and combined_list[j + 1][0] >= len(op1)
+                        ):
+                            #print(f"swapping terms: {combined_list[j]}, {combined_list[j + 1]}")
+
+                            left_term = combined_list[j][1]
+                            right_term = combined_list[j + 1][1]
+
+                            combined_list[j], combined_list[j + 1] = (
+                                combined_list[j + 1],
+                                combined_list[j],
+                            )
+
+                            op = tuple(
+                                [
+                                    x[1]
+                                    for k, x in enumerate(combined_list)
+                                    if k not in [j, j + 1]
+                                ]
+                            )
+
+                            new_data[op] = (
+                                new_data.get(op, 0)
+                                + coeff1
+                                * coeff2
+                                * self.commutation_rules[(left_term, right_term)]
+                            )
 
         return SingleTraceOperator(data=new_data)

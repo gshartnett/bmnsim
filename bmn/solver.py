@@ -309,8 +309,8 @@ def minimize(
     print(f"Initializing randomly")
     init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
 
-    #print(f"Initializing from all 1's")
-    #init = np.ones(shape=bootstrap.param_dim_null)
+    # print(f"Initializing from all 1's")
+    # init = np.ones(shape=bootstrap.param_dim_null)
 
     # print(f"Initializing from all 0's")
     # init = np.zeros(shape=bootstrap.param_dim_null)
