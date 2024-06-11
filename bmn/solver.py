@@ -65,7 +65,8 @@ def minimal_eigval(bootstrap_array_sparse, parameter_vector_null):
     if not np.allclose(
         (bootstrap_matrix - bootstrap_matrix.T), np.zeros_like(bootstrap_matrix)
     ):
-        raise ValueError("Bootstrap matrix is not symmetric.")
+        violation = np.max((bootstrap_matrix - bootstrap_matrix.T))
+        raise ValueError(f"Bootstrap matrix is not symmetric, violation = {violation}.")
 
     return scipy.linalg.eigvalsh(bootstrap_matrix)[0]
 
@@ -273,7 +274,7 @@ def get_quadratic_constraint_vector(
 def minimize(
     bootstrap,
     op,
-    # init=None,
+    init=None,
     init_scale=1.0,
     op_cons=[SingleTraceOperator(data={(): 1})],
     maxiters=25,
@@ -305,18 +306,19 @@ def minimize(
     quadratic_constraints = bootstrap.build_quadratic_constraints()
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
 
-    # initial parameter vector
-    print(f"Initializing randomly")
-    init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
+    if init is None:
+        # initial parameter vector
+        print(f"Initializing randomly")
+        init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
 
-    # print(f"Initializing from all 1's")
-    # init = np.ones(shape=bootstrap.param_dim_null)
+        # print(f"Initializing from all 1's")
+        #init = np.ones(shape=bootstrap.param_dim_null)
 
-    # print(f"Initializing from all 0's")
-    # init = np.zeros(shape=bootstrap.param_dim_null)
+        # print(f"Initializing from all 0's")
+        # init = np.zeros(shape=bootstrap.param_dim_null)
 
-    print(f"Recale to normalize")
-    init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
+    #print(f"Rescale to normalize")
+    #init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)

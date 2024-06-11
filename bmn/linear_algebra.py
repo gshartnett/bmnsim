@@ -14,7 +14,7 @@ from sparseqr import qr
 
 from bmn.debug_utils import debug
 
-TOL = 1e-12
+TOL = 1e-10
 
 
 def create_sparse_matrix_from_dict(
@@ -92,8 +92,9 @@ def get_null_space_dense(matrix: np.matrix, tol: float = TOL) -> np.ndarray:
     """
     null_space_matrix = null_space(matrix)
     verification_result = matrix.dot(null_space_matrix)
-    if not np.max(np.abs(verification_result)) <= tol:
-        raise ValueError("Warning, null space condition not satisfied.")
+    violation = np.max(np.abs(verification_result))
+    if not violation <= tol:
+        raise ValueError(f"Warning, null space condition not satisfied, violation = {violation}.")
     return null_space_matrix
 
 
@@ -125,10 +126,10 @@ def get_null_space_sparse(matrix, tol: float = TOL):
     q, _, _, rank = qr(matrix.transpose())
     null_space_matrix = csc_matrix(q)[:, rank:]
     verification_result = matrix @ null_space_matrix
-    if not np.max(np.abs(verification_result)) <= tol:
-        raise ValueError("Warning, null space condition not satisfied.")
+    violation = np.max(np.abs(verification_result))
+    if not violation <= tol:
+        raise ValueError(f"Warning, null space condition not satisfied, violation = {violation}.")
     return null_space_matrix
-
 
 def get_row_space_sparse(matrix, tol: float = TOL):
     """

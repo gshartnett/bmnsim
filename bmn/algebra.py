@@ -316,6 +316,7 @@ class MatrixSystem:
 
         # initialize data of commutator
         new_data = {}
+        count = 0
 
         # loop over the terms in each single trace operator
         for op1, coeff1 in st_operator1:
@@ -337,6 +338,9 @@ class MatrixSystem:
                             + op1[:variable1_idx]
                             + op2[variable2_idx + 1 :]
                         )
+
+                        #print(f"counter = {count}, swapping terms: {variable1}, {variable2}, new_term = {new_term}")
+                        count += 1
                         new_data[new_term] = new_data.get(new_term, 0) + new_coeff
 
         return SingleTraceOperator(data=new_data)
@@ -392,7 +396,7 @@ class MatrixSystem:
             The commutator
         """
         new_data = {}
-
+        count = 0
         # loop over each individual term in both operators
         for op1, coeff1 in st_operator1:
             for op2, coeff2 in st_operator2:
@@ -414,16 +418,17 @@ class MatrixSystem:
                             and combined_list[j][0] < len(op1)
                             and combined_list[j + 1][0] >= len(op1)
                         ):
-                            #print(f"swapping terms: {combined_list[j]}, {combined_list[j + 1]}")
 
                             left_term = combined_list[j][1]
                             right_term = combined_list[j + 1][1]
 
+                            # do the swap
                             combined_list[j], combined_list[j + 1] = (
                                 combined_list[j + 1],
                                 combined_list[j],
                             )
 
+                            # the remaining terms
                             op = tuple(
                                 [
                                     x[1]
@@ -431,6 +436,9 @@ class MatrixSystem:
                                     if k not in [j, j + 1]
                                 ]
                             )
+
+                            print(f"counter = {count}, swapping terms: {left_term}, {right_term}, new_term = {op}")
+                            count += 1
 
                             new_data[op] = (
                                 new_data.get(op, 0)

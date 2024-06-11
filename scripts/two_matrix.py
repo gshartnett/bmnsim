@@ -34,28 +34,40 @@ matplotlib.rcParams.update(
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
 
-def run_one_matrix(g, L, init=None):
+def run_two_matrix(g, L, m=1, init=None):
 
     matrix_system = MatrixSystem(
-        # operator_basis=['X', 'P'],
-        operator_basis=["X", "Pi"],
+        operator_basis=["X1", "Pi1", "X2", "Pi2"],
         commutation_rules_concise={
-            # ('P', 'X'): -1j,
-            ("Pi", "X"): 1,  # use Pi' = i P to ensure reality
+            ("Pi1", "X1"): 1,
+            ("Pi2", "X2"): 1,
         },
-        # hermitian_dict={'P': True, 'X': True},
-        hermitian_dict={"Pi": False, "X": True},
+        hermitian_dict={"Pi1": False, "X1": True, "Pi2": False, "X2": True},
     )
 
     # scale variables as P = sqrt(N) P', X = sqrt(N) X'
     hamiltonian = SingleTraceOperator(
-        # data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): 7}
-        data={("Pi", "Pi"): -1, ("X", "X"): 1, ("X", "X", "X", "X"): g}
+        data={
+            ("Pi1", "Pi1"): -1,
+            ("Pi2", "Pi2"): -1,
+            ("X1", "X1"): m**2,
+            ("X2", "X2"): m**2,
+            ("X1", "X2", "X1", "X2"): -g*2,
+            ("X2", "X1", "X2", "X1"): -g*2,
+            ("X1", "X2", "X2", "X1"): g*2,
+            ("X2", "X1", "X1", "X2"): g*2,
+            }
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
     # gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
-    gauge = MatrixOperator(data={("X", "Pi"): 1, ("Pi", "X"): -1, (): 1})
+    gauge = MatrixOperator(data={
+        ("X1", "Pi1"): 1,
+        ("Pi1", "X1"): -1,
+        ("X2", "Pi2"): 1,
+        ("Pi2", "X2"): -1,
+        (): 2
+        })
 
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,
@@ -63,7 +75,7 @@ def run_one_matrix(g, L, init=None):
         gauge=gauge,
         half_max_degree=L,
         odd_degree_vanish=True,
-        simplify_quadratic=True,
+        simplify_quadratic=False,
     )
 
     bootstrap.get_null_space_matrix()
@@ -94,61 +106,11 @@ def run_one_matrix(g, L, init=None):
         st_operator=hamiltonian, return_null_basis=True
     )
     energy = vec @ param
-    exact_energy = compute_Brezin_energy_Han_conventions(g)
-    print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
+    #exact_energy = compute_Brezin_energy_Han_conventions(g)
+    print(f"problem success: {success}, min energy found: {energy:.6f}") #, exact (L=inf) value = {exact_energy:.6f}")
     return success, energy, param
-
-
-def run_scan(L):
-    g_values = np.linspace(0.1, 4, 6)
-    results = {
-        "g": g_values,
-        "success": [],
-        "energy": [],
-        "param": [],
-    }
-
-    param = None
-    for g in g_values:
-        success, energy, param = run_one_matrix(g=g, L=L, init=param)
-        results["success"].append(success)
-        results["energy"].append(energy)
-        results["param"].append(param)
-        print(f"Completed run for g={g}, success={success}, energy={energy}")
-
-    # compute the exact values (note the difference in conventions)
-    exact_values = [compute_Brezin_energy_Han_conventions(g) for g in g_values]
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(results["g"], results["energy"], "-o", label=f"Bootstrap L={L}")
-    ax.plot(results["g"], exact_values, "-o", label=f"Exact")
-
-    for i in range(len(g_values)):
-        if results["success"][i]:
-            print(results["g"][i], results["energy"][i])
-            ax.scatter(
-                results["g"][i],
-                results["energy"][i],
-                color="k",
-                zorder=10,
-                label=f"Bootstrap L={L}, converged",
-            )
-
-    ax.legend(frameon=False)
-    ax.set_xlabel(r"$g$")
-    ax.set_ylabel(r"$E_0/N^2$")
-    plt.show()
-
-
-def run(L=3, g=1.0, scan=False):
-    if not scan:
-        success, energy, param = run_one_matrix(g=g, L=L)
-        print(f"param = {param}")
-        return
-    else:
-        return run_scan(L=L)
 
 
 if __name__ == "__main__":
 
-    fire.Fire(run)
+    fire.Fire(run_two_matrix)

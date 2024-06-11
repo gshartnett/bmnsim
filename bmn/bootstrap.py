@@ -39,6 +39,7 @@ class BootstrapSystem:
         half_max_degree: int,
         tol: float = 1e-10,
         odd_degree_vanish=True,
+        simplify_quadratic=True,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -54,9 +55,10 @@ class BootstrapSystem:
         self.param_dim = len(self.operator_dict)
         self.tol = tol
         self.null_space_matrix = None
-        self._validate()
         self.linear_constraints = None
         self.quadratic_constraints = None
+        self.simplify_quadratic = simplify_quadratic
+        self._validate()
 
     def _validate(self):
         """
@@ -65,6 +67,7 @@ class BootstrapSystem:
         self.validate_operator(operator=self.gauge)
         self.validate_operator(operator=self.hamiltonian)
         print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
+        print(f"simplify_quadratic = {self.simplify_quadratic}")
 
     def validate_operator(self, operator: MatrixOperator):
         """
@@ -191,7 +194,10 @@ class BootstrapSystem:
         index_value_dict = {}
         for (op1, op2), coeff in dt_operator:
             idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
-            index_value_dict[(idx1, idx2)] = coeff
+
+            # symmetrize
+            index_value_dict[(idx1, idx2)] = index_value_dict.get((idx1, idx2), 0) + coeff / 2
+            index_value_dict[(idx2, idx1)] = index_value_dict.get((idx2, idx1), 0) + coeff / 2
 
         mat = create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
@@ -211,7 +217,6 @@ class BootstrapSystem:
         """
         constraints = []
 
-        '''
         for op in self.operator_list:
             constraints.append(
                 self.matrix_system.single_trace_commutator(
@@ -219,7 +224,13 @@ class BootstrapSystem:
                     st_operator2=SingleTraceOperator(data={op: 1}),
                 )
             )
-        '''
+        for op in self.operator_list:
+            constraints.append(
+                self.matrix_system.single_trace_commutator(
+                    st_operator1=SingleTraceOperator(data={op: 1}),
+                    st_operator2=self.hamiltonian,
+                )
+            )
 
         '''
         for op in self.operator_list:
@@ -231,6 +242,7 @@ class BootstrapSystem:
             )
         '''
 
+        '''
         for op in self.operator_list:
             constraints.append(
                 self.matrix_system.single_trace_commutator2(
@@ -238,7 +250,7 @@ class BootstrapSystem:
                     st_operator2=self.hamiltonian,
                 )
             )
-
+        '''
         return self.clean_constraints(constraints)
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:
@@ -374,7 +386,7 @@ class BootstrapSystem:
             print(
                 f"Generated {len(odd_degree_constraints)} odd degree vanish constraints"
             )
-        linear_constraints.extend(odd_degree_constraints)
+            linear_constraints.extend(odd_degree_constraints)
 
         # cyclic constraints
         cyclic_linear, cyclic_quadratic = self.generate_cyclic_constraints()
@@ -493,35 +505,23 @@ class BootstrapSystem:
             linear_is_zero = np.max(np.abs(linear_constraint_vector)) < self.tol
             quadratic_is_zero = np.max(np.abs(quadratic_matrix)) < self.tol
 
-            use_old_method = False
-            if use_old_method:
-                if (not quadratic_is_zero) and (not linear_is_zero):
-                    linear_terms.append(linear_constraint_vector)
-                    quadratic_terms.append(quadratic_matrix)
-
-                if quadratic_is_zero and not linear_is_zero:
-                    print(
-                        f"constraint from constraint_idx = {constraint_idx} is quadratically trivial."
-                    )
-                elif not quadratic_is_zero and linear_is_zero:
-                    print(
-                        f"constraint constraint_idx = {constraint_idx} is linearly trivial."
-                    )
-            else:
+            if self.simplify_quadratic:
                 if not quadratic_is_zero:
                     linear_terms.append(csr_matrix(linear_constraint_vector))
                     quadratic_terms.append(quadratic_matrix)
                 elif not linear_is_zero:
                     additional_constraints.append(lhs)
+            else:
+                if not quadratic_is_zero or not linear_is_zero:
+                    linear_terms.append(csr_matrix(linear_constraint_vector))
+                    quadratic_terms.append(quadratic_matrix)
 
-        '''
-        if not use_old_method and len(additional_constraints) > 0:
+        if self.simplify_quadratic and len(additional_constraints) > 0:
             print(
                 f"Building quadratic constraints: adding {len(additional_constraints)} new linear constraints and rebuilding null matrix"
             )
             self.build_null_space_matrix(additional_constraints=additional_constraints)
             return self.build_quadratic_constraints()
-        '''
 
         # map to sparse matrices
         print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
@@ -640,7 +640,8 @@ class BootstrapSystem:
             op_str1 = op_str1[::-1]  # take the h.c. by reversing the elements
             for idx2, op_str2 in enumerate(self.operator_list[: self.psd_matrix_dim]):
 
-                num_momentum_ops = Counter(op_str1).get("Pi", 0)
+                num_momentum_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
+                #assert num_momentum_ops == Counter(op_str1).get("Pi", 0)
                 sign = (-1) ** num_momentum_ops
 
                 index_map = self.operator_dict[op_str1 + op_str2]
