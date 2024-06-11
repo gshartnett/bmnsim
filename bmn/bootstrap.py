@@ -37,6 +37,7 @@ class BootstrapSystem:
         hamiltonian: SingleTraceOperator,
         gauge: MatrixOperator,
         half_max_degree: int,
+        symmetry_generators: list[SingleTraceOperator] = None,
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
@@ -58,6 +59,7 @@ class BootstrapSystem:
         self.linear_constraints = None
         self.quadratic_constraints = None
         self.simplify_quadratic = simplify_quadratic
+        self.symmetry_generators = symmetry_generators
         self._validate()
 
     def _validate(self):
@@ -224,7 +226,6 @@ class BootstrapSystem:
                     st_operator2=SingleTraceOperator(data={op: 1}),
                 )
             )
-        for op in self.operator_list:
             constraints.append(
                 self.matrix_system.single_trace_commutator(
                     st_operator1=SingleTraceOperator(data={op: 1}),
@@ -232,26 +233,38 @@ class BootstrapSystem:
                 )
             )
 
-        '''
-        for op in self.operator_list:
-            constraints.append(
-                self.matrix_system.single_trace_commutator2(
-                    st_operator1=self.hamiltonian,
-                    st_operator2=SingleTraceOperator(data={op: 1}),
-                )
-            )
-        '''
-
-        '''
-        for op in self.operator_list:
-            constraints.append(
-                self.matrix_system.single_trace_commutator2(
-                    st_operator1=SingleTraceOperator(data={op: 1}),
-                    st_operator2=self.hamiltonian,
-                )
-            )
-        '''
         return self.clean_constraints(constraints)
+
+    def generate_symmetry_constraints(self) -> list[SingleTraceOperator]:
+        """
+        Generate any symmetry constraints <[M,O]>=0 for O single trace
+        and M a symmetry generator.
+
+        Returns
+        -------
+        list[SingleTraceOperator]
+            The list of constraint terms.
+        """
+        if self.symmetry_generators is None:
+            return
+
+        constraints = []
+        for symmetry_gen in self.symmetry_generators:
+            for op in self.operator_list:
+                constraints.append(
+                    self.matrix_system.single_trace_commutator(
+                        st_operator1=symmetry_gen,
+                        st_operator2=SingleTraceOperator(data={op: 1}),
+                    )
+                )
+                constraints.append(
+                    self.matrix_system.single_trace_commutator(
+                        st_operator1=SingleTraceOperator(data={op: 1}),
+                        st_operator2=symmetry_gen,
+                    )
+                )
+
+        return constraints
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:
         """
@@ -375,6 +388,12 @@ class BootstrapSystem:
         print(f"Generated {len(gauge_constraints)} gauge constraints")
         linear_constraints.extend(gauge_constraints)
 
+        # symmetry constraints
+        if self.symmetry_generators is not None:
+            symmetry_constraints = self.generate_symmetry_constraints()
+            print(f"Generated {len(symmetry_constraints)} symmetry constraints")
+            linear_constraints.extend(symmetry_constraints)
+
         # reality constraints
         reality_constraints = self.generate_reality_constraints()
         print(f"Generated {len(reality_constraints)} reality constraints")
@@ -477,6 +496,13 @@ class BootstrapSystem:
 
         linear_terms = []
         quadratic_terms = []
+
+        # add <1> = <1>^2
+        normalization_constraint = {
+            'lhs': SingleTraceOperator(data={(): 1}),
+            'rhs': DoubleTraceOperator(data={((), ()): 1}),
+        }
+        quadratic_constraints[None] = normalization_constraint
 
         # loop over constraints
         for constraint_idx, (operator_idx, constraint) in enumerate(

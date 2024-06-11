@@ -60,7 +60,6 @@ def run_two_matrix(g, L, m=1, init=None):
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
-    # gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
     gauge = MatrixOperator(data={
         ("X1", "Pi1"): 1,
         ("Pi1", "X1"): -1,
@@ -69,14 +68,31 @@ def run_two_matrix(g, L, m=1, init=None):
         (): 2
         })
 
+    symmetry_generators = [
+        SingleTraceOperator(data={('X1', 'Pi2'): 1, ('X2', 'Pi1'): -1})
+        ]
+
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
         half_max_degree=L,
         odd_degree_vanish=True,
-        simplify_quadratic=False,
+        simplify_quadratic=True,
+        symmetry_generators=None# symmetry_generators,
     )
+
+    commutator = bootstrap.matrix_system.single_trace_commutator(
+        symmetry_generators[0],
+        SingleTraceOperator(data={('X1', 'X2'): 1})
+    )
+    print(f"commutator = {commutator}")
+    commutator = bootstrap.matrix_system.single_trace_commutator(
+        symmetry_generators[0],
+        SingleTraceOperator(data={('X2', 'X2'): 1})
+    )
+    print(f"commutator = {commutator}")
+    assert 1==0
 
     bootstrap.get_null_space_matrix()
 
