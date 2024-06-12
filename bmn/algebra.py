@@ -177,6 +177,17 @@ class SingleTraceOperator(MatrixOperator):
 
         raise ValueError(f"Cannot multiply {type(other)} and {self.__class__}")
 
+    def get_real_part(self):
+        return SingleTraceOperator(data={op: np.real(coeff) for op, coeff in self})
+
+    def get_imag_part(self):
+        return SingleTraceOperator(data={op: np.imag(coeff) for op, coeff in self})
+
+    def is_real(self):
+        return self == self.get_real_part()
+
+    def is_imag(self):
+        return self == 1j * self.get_imag_part()
 
 class DoubleTraceOperator(AbstractMatrixOperator):
     """

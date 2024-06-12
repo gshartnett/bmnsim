@@ -208,6 +208,80 @@ class BootstrapSystem:
 
         return mat
 
+    def generate_symmetry_constraints(self) -> list[SingleTraceOperator]:
+        """
+        Generate any symmetry constraints <[M,O]>=0 for O single trace
+        and M a symmetry generator.
+
+        Returns
+        -------
+        list[SingleTraceOperator]
+            The list of constraint terms.
+        """
+        if self.symmetry_generators is None:
+            return []
+
+        constraints = []
+        n = len(self.matrix_system.operator_basis)
+        M = np.zeros(shape=(n, n))
+
+        # loop over symmetry generators
+        for symmetry_generator in self.symmetry_generators:
+
+            # build the matrix M in [generator, operators_vector] = M operators_vector
+            for i, op in enumerate(self.matrix_system.operator_basis):
+                commutator = self.matrix_system.single_trace_commutator(
+                    symmetry_generator,
+                    SingleTraceOperator(data={(op): 1})
+                )
+                for op, coeff in commutator:
+                    if coeff != 0:
+                        j = self.matrix_system.operator_basis.index(op[0])
+                        M[i,j] = coeff
+
+            # build the change of variables matrix
+            eig_values, old_to_new_variables = np.linalg.eig(M)
+            old_to_new_variables = old_to_new_variables.T
+
+            #relations = {f"new_op_{i}": [(self.matrix_system.operator_basis[j], old_to_new_variables[i, j]) for j in range(n)] for i in range(n)}
+            assert np.all([np.array_equal(np.zeros(n), M @ old_to_new_variables[i] - eig_values[i] * old_to_new_variables[i]) for i in range(n)])
+
+            # build all monomials using the new operators with degree < 2*L
+            new_ops_dict = {f"new_op_{i}":i for i in range(n)}
+            all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.half_max_degree + 1)}
+            all_new_operators = [x for xs in all_new_operators.values() for x in xs]  # flatten
+
+            # loop over all operators in the eigenbasis
+            for operator in all_new_operators:
+
+                # compute the charge under the symmetry
+                charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
+
+                # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
+                if charge != 0:
+
+                    operator2 = {}
+                    for i in range(len(operator)):
+                        operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j]) for j in range(n)]
+
+                    data = {}
+                    for indices in list(product(range(n), repeat=len(operator))):
+                        op = tuple([value[indices[idx]][0] for idx, value in enumerate(operator2.values())])
+                        coeff = np.prod([value[indices[idx]][1] for idx, value in enumerate(operator2.values())])
+                        if np.abs(coeff) > 1e-10:
+                            data[op] = data.get(op, 0) + coeff
+
+                    constraint = SingleTraceOperator(data=data)
+
+                    # if the constraint contains both real and imaginary terms, they must each hold separately
+                    if constraint.is_real():
+                        constraints.append(constraint)
+                    else:
+                        constraints.append(constraint.get_real_part())
+                        constraints.append(constraint.get_imag_part())
+
+        return self.clean_constraints(constraints)
+
     def generate_hamiltonian_constraints(self) -> list[SingleTraceOperator]:
         """
         Generate the Hamiltonian constraints <[H,O]>=0 for O single trace.
@@ -234,37 +308,6 @@ class BootstrapSystem:
             )
 
         return self.clean_constraints(constraints)
-
-    def generate_symmetry_constraints(self) -> list[SingleTraceOperator]:
-        """
-        Generate any symmetry constraints <[M,O]>=0 for O single trace
-        and M a symmetry generator.
-
-        Returns
-        -------
-        list[SingleTraceOperator]
-            The list of constraint terms.
-        """
-        if self.symmetry_generators is None:
-            return
-
-        constraints = []
-        for symmetry_gen in self.symmetry_generators:
-            for op in self.operator_list:
-                constraints.append(
-                    self.matrix_system.single_trace_commutator(
-                        st_operator1=symmetry_gen,
-                        st_operator2=SingleTraceOperator(data={op: 1}),
-                    )
-                )
-                constraints.append(
-                    self.matrix_system.single_trace_commutator(
-                        st_operator1=SingleTraceOperator(data={op: 1}),
-                        st_operator2=symmetry_gen,
-                    )
-                )
-
-        return constraints
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:
         """
@@ -550,8 +593,8 @@ class BootstrapSystem:
             return self.build_quadratic_constraints()
 
         # map to sparse matrices
-        print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
-        print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
+        #print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
+        #print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
         quadratic_terms = vstack(quadratic_terms)
         linear_terms = vstack(linear_terms)
 

@@ -120,3 +120,19 @@ def test_single_trace_component_of_double_trace():
     one = SingleTraceOperator(data={(): 1})
     assert (one * op).get_single_trace_component() == op
     assert (op * one).get_single_trace_component() == op
+
+
+def test_get_real_and_imag_parts():
+    st_op = SingleTraceOperator(data={"A": 1, "B": 2, "C": 3})
+    assert st_op.is_real()
+
+    st_op = SingleTraceOperator(data={"A": 1, "B": 2, "C": 3j})
+    assert not st_op.is_real()
+
+    st_op = SingleTraceOperator(data={"A": 1j, "B": 2j, "C": 3j})
+    assert st_op.is_imag()
+
+    st_op = SingleTraceOperator(data={"A": 1j, "B": 2j, "C": 3})
+    assert not st_op.is_imag()
+    assert 1j * st_op.get_imag_part() == SingleTraceOperator(data={"A": 1j, "B": 2j})
+    assert st_op.get_real_part() == SingleTraceOperator(data={"C": 3})

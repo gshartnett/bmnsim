@@ -79,20 +79,8 @@ def run_two_matrix(g, L, m=1, init=None):
         half_max_degree=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        symmetry_generators=None# symmetry_generators,
+        symmetry_generators=symmetry_generators,
     )
-
-    commutator = bootstrap.matrix_system.single_trace_commutator(
-        symmetry_generators[0],
-        SingleTraceOperator(data={('X1', 'X2'): 1})
-    )
-    print(f"commutator = {commutator}")
-    commutator = bootstrap.matrix_system.single_trace_commutator(
-        symmetry_generators[0],
-        SingleTraceOperator(data={('X2', 'X2'): 1})
-    )
-    print(f"commutator = {commutator}")
-    assert 1==0
 
     bootstrap.get_null_space_matrix()
 
