@@ -64,8 +64,10 @@ def run_one_matrix(g, L, init=None):
         half_max_degree=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        symmetry_generators=[SingleTraceOperator(data={('X1', 'Pi2'): 1, ('X2', 'Pi1'): -1})]
     )
+
+    #print(bootstrap.operator_dict)
+    print(len(bootstrap.operator_list), len(bootstrap.operator_dict))
 
     bootstrap.get_null_space_matrix()
 

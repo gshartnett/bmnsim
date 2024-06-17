@@ -314,7 +314,7 @@ class MatrixSystem:
         return commutation_rules
 
     def single_trace_commutator(
-        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator
+        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator, verbose=False
     ) -> SingleTraceOperator:
         """
         Take the commutator of two single trace operators.
@@ -350,18 +350,19 @@ class MatrixSystem:
                             + op2[variable2_idx + 1 :]
                         )
 
-                        #print(f"counter = {count}, swapping terms: {variable1}, {variable2}, new_term = {new_term}")
-                        count += 1
+                        if verbose:
+                            print(f"counter = {count}, swapping terms: {variable1}, {variable2}, new_term = {new_term}")
+                            count += 1
                         new_data[new_term] = new_data.get(new_term, 0) + new_coeff
 
         return SingleTraceOperator(data=new_data)
 
     def single_trace_commutator2(
-        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator
+        self, st_operator1: SingleTraceOperator, st_operator2: SingleTraceOperator, verbose=False
     ) -> SingleTraceOperator:
         """
-        Compute the commutator of two single trace operators. Used to
-        compute the Hamiltonian constraints.
+        Compute the commutator of two single trace operators using left-to-right convention.
+        Used to compute the Hamiltonian constraints.
 
         For two monomial-type terms, such as
             O1 = tr(ABC), O2 = tr(DEF),
@@ -448,8 +449,9 @@ class MatrixSystem:
                                 ]
                             )
 
-                            print(f"counter = {count}, swapping terms: {left_term}, {right_term}, new_term = {op}")
-                            count += 1
+                            if verbose:
+                                print(f"counter = {count}, swapping terms: {left_term}, {right_term}, new_term = {op}")
+                                count += 1
 
                             new_data[op] = (
                                 new_data.get(op, 0)

@@ -150,12 +150,45 @@ class BootstrapSystem:
             deg: [x for x in product(self.matrix_system.operator_basis, repeat=deg)]
             for deg in range(0, max_degree + 1)
         }
-        self.psd_matrix_dim = sum(
+
+        '''
+        # compute the dimension of the bootstrap matrix
+        self.bootstrap_matrix_dim = sum(
             len(value)
             for degree, value in operators.items()
             if degree <= self.half_max_degree
         )
-        return [x for xs in operators.values() for x in xs]  # flatten
+        '''
+
+        operator_list = [x for xs in operators.values() for x in xs]
+
+        # arrange list in blocks of even/odd degree, i.e.,
+        # operators_by_degree = {
+        #   0: [(), ('X', 'X'), ..., ]
+        #   1: [('X'), ('P'), ..., ]
+        # }
+        operators_by_degree = {}
+        degree_func = lambda x: len(x)
+        for op in operator_list:
+            degree = degree_func(op)
+            if degree not in operators_by_degree:
+                operators_by_degree[degree] = [op]
+            else:
+                operators_by_degree[degree].append(op)
+
+        # arrange the operators with degree <= L by degree mod 2
+        # for building the bootstrap matrix
+        bootstrap_basis_list = []
+        for deg, op_list in operators.items():
+            if deg % 2 == 0 and deg <= self.half_max_degree:
+                bootstrap_basis_list.extend(op_list)
+        for deg, op_list in operators.items():
+            if deg % 2 != 0 and deg <= self.half_max_degree:
+                bootstrap_basis_list.extend(op_list)
+        self.bootstrap_basis_list = bootstrap_basis_list
+        self.bootstrap_matrix_dim = len(bootstrap_basis_list)
+
+        return operator_list
 
     def single_trace_to_coefficient_vector(
         self, st_operator: SingleTraceOperator, return_null_basis: bool = False
@@ -271,14 +304,26 @@ class BootstrapSystem:
                         if np.abs(coeff) > 1e-10:
                             data[op] = data.get(op, 0) + coeff
 
-                    constraint = SingleTraceOperator(data=data)
+                    constraint_op = SingleTraceOperator(data=data)
+
+                # do a check
+                if charge == 0:
+                    if not self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op) == SingleTraceOperator(data={}):
+                        raise ValueError("Commutator of uncharged operator is not zero, but it should be.")
+                else:
 
                     # if the constraint contains both real and imaginary terms, they must each hold separately
-                    if constraint.is_real():
-                        constraints.append(constraint)
+                    if constraint_op.is_real():
+                        constraints.append(constraint_op)
                     else:
-                        constraints.append(constraint.get_real_part())
-                        constraints.append(constraint.get_imag_part())
+                        constraints.append(constraint_op.get_real_part())
+                        constraints.append(constraint_op.get_imag_part())
+
+
+        # check for SO(2) case - move to a unit test at some point
+        # also note sign is wrong for eigenvalue...
+        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"X1": 1, "X2": -1j})) == - 1j * SingleTraceOperator(data={"X1": 1, "X2": -1j})
+        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})) == - 1j * SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})
 
         return self.clean_constraints(constraints)
 
@@ -705,9 +750,11 @@ class BootstrapSystem:
         null_space_matrix = self.get_null_space_matrix()
 
         bootstrap_dict = {}
-        for idx1, op_str1 in enumerate(self.operator_list[: self.psd_matrix_dim]):
+        #for idx1, op_str1 in enumerate(self.operator_list[: self.bootstrap_matrix_dim]):
+        for idx1, op_str1 in enumerate(self.bootstrap_basis_list):
             op_str1 = op_str1[::-1]  # take the h.c. by reversing the elements
-            for idx2, op_str2 in enumerate(self.operator_list[: self.psd_matrix_dim]):
+            #for idx2, op_str2 in enumerate(self.operator_list[: self.bootstrap_matrix_dim]):
+            for idx2, op_str2 in enumerate(self.bootstrap_basis_list):
 
                 num_momentum_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
                 #assert num_momentum_ops == Counter(op_str1).get("Pi", 0)
@@ -725,7 +772,7 @@ class BootstrapSystem:
 
         # map to a sparse array
         bootstrap_array = np.zeros(
-            (self.psd_matrix_dim, self.psd_matrix_dim, self.param_dim_null)
+            (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null)
         )
         for (i, j, k), value in bootstrap_dict.items():
             bootstrap_array[i, j, k] = value
