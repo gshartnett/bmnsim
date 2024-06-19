@@ -69,7 +69,7 @@ class BootstrapSystem:
         self.validate_operator(operator=self.gauge)
         self.validate_operator(operator=self.hamiltonian)
         print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
-        print(f"simplify_quadratic = {self.simplify_quadratic}")
+        print(f"Attribute: simplify_quadratic = {self.simplify_quadratic}")
 
     def validate_operator(self, operator: MatrixOperator):
         """
@@ -311,7 +311,6 @@ class BootstrapSystem:
                     if not self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op) == SingleTraceOperator(data={}):
                         raise ValueError("Commutator of uncharged operator is not zero, but it should be.")
                 else:
-
                     # if the constraint contains both real and imaginary terms, they must each hold separately
                     if constraint_op.is_real():
                         constraints.append(constraint_op)
@@ -416,8 +415,11 @@ class BootstrapSystem:
         quadratic_constraints = {}
         linear_constraints = {}
         for idx, op in enumerate(self.operator_list):
-            if len(op) > 1:  # TODO check this...
-                assert isinstance(op, tuple)
+            if len(op) > 1:
+
+                if not isinstance(op, tuple):
+                    raise ValueError(f"op should be tuple, not {type(op)}")
+
                 # the LHS corresponds to single trace operators
                 eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
                     data={op[1:] + (op[0],): 1}
@@ -522,7 +524,7 @@ class BootstrapSystem:
 
         L_{ij} v_j = 0.
 
-        NOTE: Not sure if it's a good idea to store the constraints, good become memory intensive.
+        NOTE: Not sure if it's a good idea to store the constraints, may become memory intensive.
 
         Returns
         -------
@@ -687,10 +689,8 @@ class BootstrapSystem:
                 cleaned_constraints.append(st_operator)
         return cleaned_constraints
 
-    def build_bootstrap_table(self) -> None:
+    def build_bootstrap_table(self) -> csr_matrix:
         """
-        TODO figure out return type
-
         Creates the bootstrap table.
 
         The bootstrap matrix is
@@ -744,38 +744,37 @@ class BootstrapSystem:
         ------------------------------------------------------------------------
         Returns
         -------
-        X
-            X
+        csr_matrix
+            The bootstrap array, with shape (self.bootstrap_matrix_dim**2, self.param_dim_null).
+            It has been reshaped to be a matrix.
         """
         null_space_matrix = self.get_null_space_matrix()
 
         bootstrap_dict = {}
-        #for idx1, op_str1 in enumerate(self.operator_list[: self.bootstrap_matrix_dim]):
         for idx1, op_str1 in enumerate(self.bootstrap_basis_list):
             op_str1 = op_str1[::-1]  # take the h.c. by reversing the elements
-            #for idx2, op_str2 in enumerate(self.operator_list[: self.bootstrap_matrix_dim]):
             for idx2, op_str2 in enumerate(self.bootstrap_basis_list):
 
-                num_momentum_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
-                #assert num_momentum_ops == Counter(op_str1).get("Pi", 0)
-                sign = (-1) ** num_momentum_ops
-
+                # tally up number of anti-hermitian operators, and add (-1) factor if odd
+                num_antihermitian_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
+                sign = (-1) ** num_antihermitian_ops
                 index_map = self.operator_dict[op_str1 + op_str2]
                 for k in range(null_space_matrix.shape[1]):
                     x = sign * null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
-                        # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
+                        #print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
 
-        # print('Returning bootstrap_dict for debugging')
-        # return bootstrap_dict
+        #return bootstrap_dict
 
         # map to a sparse array
         bootstrap_array = np.zeros(
-            (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null)
+            (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null),
+            dtype=np.float64,
         )
         for (i, j, k), value in bootstrap_dict.items():
             bootstrap_array[i, j, k] = value
+
         bootstrap_array_sparse = csr_matrix(
             bootstrap_array.reshape(
                 bootstrap_array.shape[0] * bootstrap_array.shape[1],
@@ -784,3 +783,30 @@ class BootstrapSystem:
         )
 
         return bootstrap_array_sparse
+
+    def get_bootstrap_matrix(self, param: np.ndarray):
+        dim = self.bootstrap_matrix_dim
+        bootstrap_array_sparse = self.build_bootstrap_table()
+
+        bootstrap_matrix = np.reshape(
+            bootstrap_array_sparse.dot(param), (dim, dim)
+        )
+
+        # verify that matrix is symmetric
+        # the general condition is that the matrix is Hermitian, but we have made it real
+        # NOTE: this property only holds when the reality constraints are imposed - only then
+        # do we have a relation b/w for example <tr(XP)> and <tr(XP)>.
+        if not np.allclose(
+            (bootstrap_matrix - bootstrap_matrix.T), np.zeros_like(bootstrap_matrix)
+        ):
+            violation = np.max((bootstrap_matrix - bootstrap_matrix.T))
+            raise ValueError(f"Bootstrap matrix is not symmetric, violation = {violation}.")
+
+        return bootstrap_matrix
+
+    def get_operator_expectation_value(self, st_operator: SingleTraceOperator, param: np.ndarray) -> float:
+        vec = self.single_trace_to_coefficient_vector(
+            st_operator=st_operator, return_null_basis=True
+        )
+        op_expectation_value = vec @ param
+        return op_expectation_value

@@ -41,21 +41,26 @@ Current status
 
 ## Pseudocode of SDP optimization
 first do sdp_init
+    Finds the parameters such that
+    1. All bootstrap tables are positive semidefinite;
+    2. ||A.dot(param) - b||^2_2 + reg * ||param - init||^2_2 is minimized.
 
 then for loop for iter in range(max_iters)
 
     sdp_relax
         Finds the parameters such that
         1. All bootstrap tables are positive semidefinite;
-        2. ||A.dot(param) - b||^2_2 + reg * ||param - init||^2_2 is minimized
+        2. ||param - init||_2 <= 0.8 * radius;
+        3. The violation of linear constraints ||A.dot(param) - b||_2 is minimized.
 
     compute value and gradient of quadratic constraints
 
-    sdp_minmize
+    sdp_minimize
         Finds the parameters such that
         1. All bootstrap tables are positive semidefinite;
-        2. ||relaxed_param - param||_2 <= 0.8 * radius;
-        3. The violation of linear constraints ||A.dot(relaxed_param) - b||_2 is minimized.
+        2. ||param - init||_2 <= radius;
+        3. A.dot(param) = b;
+        4. vec.dot(param) + reg * np.linalg.norm(param) is minimized.
 
     possibly shrink radius
 

@@ -7,7 +7,7 @@ from bmn.algebra import (
 )
 from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import disable_debug
-from bmn.solver import minimize
+from bmn.solver import minimize, minimal_eigval
 from bmn.brezin import compute_Brezin_energy, compute_Brezin_energy_Han_conventions
 
 # plot settings
@@ -93,12 +93,18 @@ def run_one_matrix(g, L, init=None):
         print(f"op = {op}, EV = {op_expectation_value}")
     """
 
-    vec = bootstrap.single_trace_to_coefficient_vector(
-        st_operator=hamiltonian, return_null_basis=True
-    )
-    energy = vec @ param
+    energy = bootstrap.get_operator_expectation_value(
+        st_operator=hamiltonian,
+        param=param
+        )
     exact_energy = compute_Brezin_energy_Han_conventions(g)
     print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
+
+    minimal_eigenvalue = minimal_eigval(
+        bootstrap_array_sparse=bootstrap.build_bootstrap_table(),
+        parameter_vector_null=vec
+        )
+
     return success, energy, param
 
 
