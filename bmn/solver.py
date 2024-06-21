@@ -101,7 +101,7 @@ def sdp_init(
 
     # solve the above described optimization problem
     prob = cp.Problem(
-        cp.Minimize(cp.sum_squares(A @ param - b) + reg * cp.sum_squares(param - init)),
+        cp.Minimize(cp.sum_squares(A @ param - b) + 0 * reg * cp.sum_squares(param - init)),
         constraints,
     )
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
@@ -113,7 +113,7 @@ def sdp_init(
 
 
 def sdp_relax(
-    bootstrap_array_sparse, A, b, init, radius, maxiters=10_000, eps=1e-4, verbose=True
+    bootstrap_array_sparse, A, b, init, radius, maxiters=10_000, eps=1e-4, relax_rate=0.8, verbose=True
 ):
     """
     Finds the parameters such that
@@ -137,9 +137,9 @@ def sdp_relax(
     param = cp.Variable(num_variables)
 
     # build the constraints
-    # 1. ||param - init||_2 <= 0.8 * radius
+    # 1. ||param - init||_2 <= relax_rate * radius
     # 2. the PSD bootstrap constraint(s)
-    constraints = [cp.norm(param - init) <= 0.8 * radius]
+    constraints = [cp.norm(param - init) <= relax_rate * radius]
     size = int(np.sqrt(bootstrap_array_sparse.shape[0]))
     constraints = [cp.reshape(bootstrap_array_sparse @ param, (size, size)) >> 0]
 
@@ -280,6 +280,7 @@ def minimize(
     maxiters=25,
     eps=5e-4,
     reg=5e-4,
+    relax_rate=0.8,
     verbose=True,
     savefile="",
 ):
@@ -383,6 +384,7 @@ def minimize(
     mu = 1
     # optimization steps
     for step in range(maxiters):
+        debug(f"step = {step+1}/{maxiters}")
         # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
         val, grad = get_quadratic_constraint_vector(
             quadratic_constraints, param, compute_grad=True
@@ -397,6 +399,7 @@ def minimize(
             b=b,
             init=param,
             radius=radius,
+            relax_rate=relax_rate,
             verbose=verbose,
         )
         linear_constraint_norm = compute_L2_norm_of_linear_constraints(
@@ -417,7 +420,7 @@ def minimize(
         )
         if new_param is None:
             # wrongly infeasible
-            radius *= 0.9
+            radius *= relax_rate # GSH used to be 0.9
             continue
         # check progress
         cons_val = A.dot(param) - b
@@ -482,7 +485,8 @@ def minimize(
             # accept
             if maxcv < eps and min_eig > -eps:
                 last_param = param
-                radius *= 1.2
+                #radius *= 1.2
+                radius *= (2 - relax_rate) # GSH used to be 1.2
             param = new_param
             if savefile:
                 obs = linear_constraint_matrix.dot(param)
@@ -490,7 +494,7 @@ def minimize(
                 debug("Data saved successfully")
         else:
             # reject
-            radius = 0.8 * np.linalg.norm(new_param - param)
+            radius = relax_rate * np.linalg.norm(new_param - param)
     debug(
         "WARNING: minimize did not converge to precision {:.5f} within {} steps.".format(
             eps, maxiters

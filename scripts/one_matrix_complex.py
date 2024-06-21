@@ -37,25 +37,20 @@ colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 def run_one_matrix(g, L, init=None):
 
     matrix_system = MatrixSystem(
-        # operator_basis=['X', 'P'],
-        operator_basis=["X", "Pi"],
+        operator_basis=['X', 'P'],
         commutation_rules_concise={
-            # ('P', 'X'): -1j,
-            ("Pi", "X"): 1,  # use Pi' = i P to ensure reality
+            ('P', 'X'): -1j,
         },
-        # hermitian_dict={'P': True, 'X': True},
-        hermitian_dict={"Pi": False, "X": True},
+        hermitian_dict={'P': True, 'X': True},
     )
 
     # scale variables as P = sqrt(N) P', X = sqrt(N) X'
     hamiltonian = SingleTraceOperator(
-        # data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): 7}
-        data={("Pi", "Pi"): -1, ("X", "X"): 1, ("X", "X", "X", "X"): g}
+        data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): 7}
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
-    # gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
-    gauge = MatrixOperator(data={("X", "Pi"): 1, ("Pi", "X"): -1, (): 1})
+    gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
 
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,

@@ -457,14 +457,15 @@ class BootstrapSystem:
 
         return linear_constraints, quadratic_constraints
 
-    def generate_constraints(self) -> list[dict[str, float]]:
+    def generate_constraints(self) -> tuple[list[SingleTraceOperator]]:
         """
         Generate all constraints.
 
         Returns
         -------
-        list[dict[str, float]]
-            The list of linear constraints, with each one expressed as a dictionary.
+        tuple[list[SingleTraceOperator]]
+            The first entry in the tuple is the list of linear constraints.
+            The second is the list of cyclic constraints.
         """
         linear_constraints = []
 

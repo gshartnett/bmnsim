@@ -61,35 +61,6 @@ def run(nu, L):
         }
     )
 
-    # scale variables as P = sqrt(N) P', X = sqrt(N) X'
-    hamiltonian = SingleTraceOperator(
-        data={
-            # kinetic term
-            ("Pi0", "Pi0"): -1 / 2,
-            ("Pi1", "Pi1"): -1 / 2,
-            ("Pi2", "Pi2"): -1 / 2,
-            # quadratic term
-            ("X0", "X0"): 1 / 2,
-            ("X1", "X1"): 1 / 2,
-            ("X2", "X2"): 1 / 2,
-            # quadratic term (XY)
-            ("X0", "X1", "X0", "X1"): -1 / 4,
-            ("X1", "X0", "X1", "X0"): -1 / 4,
-            ("X0", "X1", "X1", "X0"): 1 / 4,
-            ("X1", "X0", "X0", "X1"): 1 / 4,
-            # quadratic term (XZ) TODO check sign
-            ("X0", "X2", "X0", "X2"): -1 / 4,
-            ("X2", "X0", "X2", "X0"): -1 / 4,
-            ("X0", "X2", "X2", "X0"): 1 / 4,
-            ("X2", "X0", "X0", "X2"): 1 / 4,
-            # quadratic term (YZ)
-            ("X1", "X2", "X1", "X2"): -1 / 4,
-            ("X2", "X1", "X2", "X1"): -1 / 4,
-            ("X1", "X2", "X2", "X1"): 1 / 4,
-            ("X2", "X1", "X1", "X2"): 1 / 4,
-        }
-    )
-
     gauge = MatrixOperator(
         data={
             ("X0", "Pi0"): 1,
