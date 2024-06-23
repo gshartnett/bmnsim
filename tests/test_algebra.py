@@ -90,7 +90,9 @@ def test_single_trace_commutator_twomatrix():
     )
 
     assert matrix_system.single_trace_commutator(hamiltonian, S2) == commutator
-   # assert matrix_system.single_trace_commutator2(S2, hamiltonian) == commutator
+
+
+# assert matrix_system.single_trace_commutator2(S2, hamiltonian) == commutator
 
 
 def test_zero_single_trace_operator():

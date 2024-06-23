@@ -8,6 +8,13 @@ Current status
 - BMN might need complex vectors
 
 
+- SO(3) symmetry in mini-BMN
+- giant gravitons
+- revisit reality conditions, can I change my approach to handle mini-BMN as well?
+- can I come up with a better SDP algorithm?
+
+
+
 # TODO
 - coding
     - clean up
@@ -17,7 +24,7 @@ Current status
     - how to set-up scans, logging
 - physics
     [x] verify 1-matrix model
-    - maybe verify 2-matrix model
+    - [x] maybe verify 2-matrix model
     - mini-BMN model
         - what does a giant graviton look like?
         - what role does SUSY play here, even with no fermions?

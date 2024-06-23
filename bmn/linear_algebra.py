@@ -162,3 +162,15 @@ def is_in_row_space_dense(matrix: np.ndarray, vector: np.ndarray) -> bool:
     v_projected = row_space_matrix.T @ c
 
     return np.allclose(v_projected, vector)
+
+
+def get_real_coefficients_from_dict(x: dict):
+    coefficients = np.asarray(list(x.values()))
+    all_real = np.allclose(np.real(coefficients), coefficients)
+    all_imag = np.allclose(1j * np.imag(coefficients), coefficients)
+    if not (all_real or all_imag):
+        raise ValueError("Warning, coefficients are not all real or imaginary.")
+    if all_real:
+        return {key: np.real(coeff) for key, coeff in x.items()}
+    if all_imag:
+        return {key: np.imag(coeff) for key, coeff in x.items()}

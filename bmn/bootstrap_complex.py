@@ -11,6 +11,7 @@ from scipy.sparse import (
     csr_matrix,
     hstack,
     vstack,
+    bmat
 )
 
 from bmn.algebra import (
@@ -27,7 +28,7 @@ from bmn.linear_algebra import (
 )
 
 
-class BootstrapSystem:
+class BootstrapSystemComplex:
     """
     _summary_
     """
@@ -61,7 +62,6 @@ class BootstrapSystem:
         self.quadratic_constraints = None
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
-        print(f"NOTE Remember to incorporate more general basis changes!")
         self._validate()
 
     def _validate(self):
@@ -184,10 +184,14 @@ class BootstrapSystem:
 
     def single_trace_to_coefficient_vector(
         self, st_operator: SingleTraceOperator, return_null_basis: bool = False
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Map a single trace operator to a vector of the coefficients, v_i.
-        Optionally returns the vector in the null basis, u_a = v_i K_{ia}
+        Map a single trace operator to the vector of coefficients, v_i.
+        As the numerical implementation assumes real-valued objects, this
+        will be returned as two real vectors - vR and vI, with the full
+        vector being v = vR + i vI.
+
+        Optionally returns the vectors in the null basis, u_a = v_i K_{ia}
 
         Parameters
         ----------
@@ -200,8 +204,8 @@ class BootstrapSystem:
 
         Returns
         -------
-        np.ndarray
-            The vector.
+        tuple[np.ndarray, np.ndarray]
+            The real and imaginary parts of the coefficient vector.
         """
         # validate
         self.validate_operator(operator=st_operator)
@@ -209,14 +213,16 @@ class BootstrapSystem:
         for op, coeff in st_operator:
             idx = self.operator_dict[op]
             vec[idx] = coeff
+        vec = np.asarray(vec)
         if not return_null_basis:
-            return np.asarray(vec)
-        return np.asarray(vec) @ self.get_null_space_matrix()
+            return vec
+        return vec @ self.get_null_space_matrix()
 
     def double_trace_to_coefficient_matrix(self, dt_operator: DoubleTraceOperator):
         # use large-N factorization <tr(O1)tr(O2)> = <tr(O1)><tr(O2)>
         # to represent the double-trace operator as a quadratic expression of single trace operators,
         # \sum_{ij} M_{ij} v_i v_j, represented as an index-value dict.
+
         index_value_dict = {}
         for (op1, op2), coeff in dt_operator:
             idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
@@ -367,28 +373,6 @@ class BootstrapSystem:
                 constraints.append(SingleTraceOperator(data={op: 1}))
         return constraints
 
-    def generate_reality_constraints(self) -> list[SingleTraceOperator]:
-        """
-        Generate single trace constraints imposed by reality,
-            <O^dagger> = <O>*
-            NOTE the current implementation assumes <O> is real, so that <O>* = <O>.
-
-        Returns
-        -------
-        list[SingleTraceOperator]
-            The list of constraint terms.
-        """
-        constraints = []
-        for op in self.operator_list:
-            st_operator = SingleTraceOperator(data={op: 1})
-            st_operator_dagger = self.matrix_system.hermitian_conjugate(
-                operator=SingleTraceOperator(data={op: 1})
-            )
-
-            if len(st_operator - st_operator_dagger) > 0:
-                constraints.append(st_operator - st_operator_dagger)
-        return self.clean_constraints(constraints)
-
     def generate_cyclic_constraints(
         self,
     ) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
@@ -476,11 +460,6 @@ class BootstrapSystem:
             print(f"Generated {len(symmetry_constraints)} symmetry constraints")
             linear_constraints.extend(symmetry_constraints)
 
-        # reality constraints
-        reality_constraints = self.generate_reality_constraints()
-        print(f"Generated {len(reality_constraints)} reality constraints")
-        linear_constraints.extend(reality_constraints)
-
         # odd degree vanish
         if self.odd_degree_vanish:
             odd_degree_constraints = self.generate_odd_degree_vanish_constraints()
@@ -518,6 +497,18 @@ class BootstrapSystem:
 
         NOTE: Not sure if it's a good idea to store the constraints, may become memory intensive.
 
+        NOTE: In this implementation of the bootstrap, the constraints are complex-valued. However,
+        the subsequent operations assume that the objects are real-valued. To address this, v will be
+        made real by stacking the real and imaginary parts, as in v = [vR, vI]. The linear matrix will
+        then be block diagonal
+
+        L = [
+            [LR, 0],
+            [0, Li]
+            ]
+
+        so that L v = [LR vR, LI vI]
+
         Returns
         -------
         coo_matrix
@@ -535,14 +526,48 @@ class BootstrapSystem:
 
         # build the index-value dict
         index_value_dict = {}
-        for idx_constraint, st_operator in enumerate(self.linear_constraints):
+        constraint_idx = 0
+
+        # real part LR
+        # for sum_k z_k v_k = 0 this becomes sum_k (x_k v_R^k - y_k v_I^i)
+        # where z_k = x_k + i y_k
+        for st_operator in self.linear_constraints:
             for op_str, coeff in st_operator:
-                index_value_dict[(idx_constraint, self.operator_dict[op_str])] = coeff
+                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.real(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim)] = -np.imag(coeff)
+            constraint_idx += 1
+
+        # impose the reality constraints <tr(O^{dagger})> = <tr(O)>* (real part)
+        # if o1^{dagger} = o2, then the condition is Re(v1) - Re(v2) = 0
+        for op_str, op_idx in self.operator_dict.items():
+            op_str_reversed = op_str[::-1]
+            op_reversed_idx = self.operator_dict[op_str_reversed]
+            index_value_dict[(constraint_idx, op_idx)] = 1
+            index_value_dict[(constraint_idx, op_reversed_idx)] = -1
+            constraint_idx += 1
+
+        # imaginary part LI
+        # for sum_k z_k v_k = 0 this becomes sum_k (x_k v_I^k + y_k v_R^i)
+        # where z_k = x_k + i y_k
+        for st_operator in self.linear_constraints:
+            for op_str, coeff in st_operator:
+                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim)] = np.real(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.imag(coeff)
+            constraint_idx += 1
+
+        # impose the reality constraints <tr(O^{dagger})> = <tr(O)>* (imaginary part)
+        # if o1^{dagger} = o2, then the condition is Im(v1) + Im(v2) = 0
+        for op_str, op_idx in self.operator_dict.items():
+            op_str_reversed = op_str[::-1]
+            op_reversed_idx = self.operator_dict[op_str_reversed]
+            index_value_dict[(constraint_idx, op_idx + self.param_dim)] = 1
+            index_value_dict[(constraint_idx, op_reversed_idx + self.param_dim)] = 1
+            constraint_idx += 1
 
         # return the constraint matrix
         return create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
-            matrix_shape=(len(self.linear_constraints), len(self.operator_list)),
+            matrix_shape=(constraint_idx, 2 * self.param_dim),
         )
 
     def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
@@ -587,9 +612,7 @@ class BootstrapSystem:
         quadratic_constraints[None] = normalization_constraint
 
         # loop over constraints
-        for constraint_idx, (operator_idx, constraint) in enumerate(
-            quadratic_constraints.items()
-        ):
+        for constraint in quadratic_constraints.values():
 
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
@@ -598,31 +621,85 @@ class BootstrapSystem:
             linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
             quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
 
-            # worry about symmetrization of quadratic matrix
+            # build the vectors [vR, 0] and [0, vI] for the two sets of constraints (real and imaginary)
+            linear_constraint_vectorR = np.concatenate((linear_constraint_vector.real, 0 * linear_constraint_vector.imag))
+            linear_constraint_vectorI = np.concatenate((0 * linear_constraint_vector.real, linear_constraint_vector.imag))
+
+            # rewrite the quadratic constraints in terms of real variables
+            # this entails two things:
+            #   1. every constraint will become two (one real and one imaginary)
+            #   2. each constraint will be naturally expressed as a (2d, 2d) matrix
+            #      acting on the stacked parameter vector [vR, vI]
+            qR = quadratic_matrix.real
+            qI = quadratic_matrix.imag
+            #print(type(quadratic_matrix), type(qR), type(qI))
+            #assert np.allclose(quadratic_matrix.todense(), (qR + 1j * qI).todense())
+
+            QR = bmat([[qR, -qI], [-qI, -qR]], format='coo')
+            QI = bmat([[qI, qR], [qR, -qI]], format='coo')
+
+            print('\nBEFORE')
+            print(np.sum(np.abs(QR)))
+            print(np.sum(np.abs(QI)))
+            print('AFTER')
 
             # transform to null basis
             # the minus sign is very important: (-RHS + LHS = 0)
-            linear_constraint_vector = linear_constraint_vector @ null_space_matrix
-            quadratic_matrix = (
-                -null_space_matrix.T @ quadratic_matrix @ null_space_matrix
+            #linear_constraint_vector = linear_constraint_vector @ null_space_matrix
+            linear_constraint_vectorR = linear_constraint_vectorR @ null_space_matrix
+            linear_constraint_vectorI = linear_constraint_vectorI @ null_space_matrix
+
+            QR = (
+                -null_space_matrix.T @ QR @ null_space_matrix
+            )
+            QI = (
+                -null_space_matrix.T @ QI @ null_space_matrix
             )
 
-            # reshape the (d,d) matrix to a (1,d^2) matrix
-            quadratic_matrix = quadratic_matrix.reshape((1, self.param_dim_null**2))
+            print(np.sum(np.abs(linear_constraint_vectorR)))
+            print(np.sum(np.abs(linear_constraint_vectorI)))
 
-            linear_is_zero = np.max(np.abs(linear_constraint_vector)) < self.tol
-            quadratic_is_zero = np.max(np.abs(quadratic_matrix)) < self.tol
+            #print(f"linear_constraint_vectorR.shape = {linear_constraint_vectorR.shape}")
+            #print(f"linear_constraint_vectorI.shape = {linear_constraint_vectorI.shape}")
+            #print(f"QR.shape = {QR.shape}")
+            #print(f"QI.shape = {QI.shape}")
 
+            # reshape the (d, d) matrices to (1, d^2) matrices
+            QR = QR.reshape((1, self.param_dim_null**2))
+            QI = QI.reshape((1, self.param_dim_null**2))
+
+            # process the real and imaginary constraints separately
+            # real part
+            linear_is_zero = np.max(np.abs(linear_constraint_vectorR)) < self.tol
+            quadratic_is_zero = np.max(np.abs(QR)) < self.tol
             if self.simplify_quadratic:
                 if not quadratic_is_zero:
-                    linear_terms.append(csr_matrix(linear_constraint_vector))
-                    quadratic_terms.append(quadratic_matrix)
+                    linear_terms.append(csr_matrix(linear_constraint_vectorR))
+                    quadratic_terms.append(QR)
                 elif not linear_is_zero:
-                    additional_constraints.append(lhs)
+                    additional_constraints.append(lhs.get_real_part())
             else:
                 if not quadratic_is_zero or not linear_is_zero:
-                    linear_terms.append(csr_matrix(linear_constraint_vector))
-                    quadratic_terms.append(quadratic_matrix)
+                    linear_terms.append(csr_matrix(linear_constraint_vectorR))
+                    quadratic_terms.append(QR)
+
+            # imaginary part
+            linear_is_zero = np.max(np.abs(linear_constraint_vectorI)) < self.tol
+            quadratic_is_zero = np.max(np.abs(QI)) < self.tol
+            if self.simplify_quadratic:
+                if not quadratic_is_zero:
+                    linear_terms.append(csr_matrix(linear_constraint_vectorI))
+                    quadratic_terms.append(QI)
+                elif not linear_is_zero:
+                    additional_constraints.append(lhs.get_imag_part())
+            else:
+                if not quadratic_is_zero or not linear_is_zero:
+                    linear_terms.append(csr_matrix(linear_constraint_vectorI))
+                    quadratic_terms.append(QI)
+
+        print(f"len(quadratic_terms) = {len(quadratic_terms)}")
+
+        assert 1 == 0
 
         if self.simplify_quadratic and len(additional_constraints) > 0:
             print(
@@ -632,8 +709,6 @@ class BootstrapSystem:
             return self.build_quadratic_constraints()
 
         # map to sparse matrices
-        #print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
-        #print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
         quadratic_terms = vstack(quadratic_terms)
         linear_terms = vstack(linear_terms)
 
