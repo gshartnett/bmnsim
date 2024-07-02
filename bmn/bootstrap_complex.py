@@ -617,6 +617,8 @@ class BootstrapSystemComplex:
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
 
+            print(f"constraint: lhs = {lhs}, rhs = {rhs}")
+
             # initialize the quadratic constraint matrix
             linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
             quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
@@ -656,8 +658,8 @@ class BootstrapSystemComplex:
                 -null_space_matrix.T @ QI @ null_space_matrix
             )
 
-            print(np.sum(np.abs(linear_constraint_vectorR)))
-            print(np.sum(np.abs(linear_constraint_vectorI)))
+            print(np.sum(np.abs(QR)))
+            print(np.sum(np.abs(QI)))
 
             #print(f"linear_constraint_vectorR.shape = {linear_constraint_vectorR.shape}")
             #print(f"linear_constraint_vectorI.shape = {linear_constraint_vectorI.shape}")

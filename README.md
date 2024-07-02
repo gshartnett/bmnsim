@@ -5,7 +5,15 @@ Current status
     - only converges stochastically
     - seems to converge less often when L increases
     - I don't understand the commutator expression for [H,O] constraints
-- BMN might need complex vectors
+- BMN seems to require complex vectors
+    - double the length of the param vector, v_vec = [vR, vI], where v = vR + i vI is the complex vector
+    - the reality condition is now vR_i = vR_j, vI_i = -vI_j for (i,j) corresponding to conjugate operators
+    - shouldn't impose this condition for BMN or other models with complex couplings
+    - should use variables X, P, not X, Pi
+    - now whenever I map a constraint to a matrix-valued object, I need to separately record the real and imaginary parts
+    - I was running into issues trying to get the one-matrix model to work with this new approach, the reality constraints were setting all quadratic constraints to zero
+    - linear constraints, quadratic constraints need to change, will be a different constraint for the real and imaginary part (either could be empty)
+    - bootstrap matrix should be complex but Hermitian (and therefore real eigenvalues)
 
 
 - SO(3) symmetry in mini-BMN
