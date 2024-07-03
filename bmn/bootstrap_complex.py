@@ -55,7 +55,8 @@ class BootstrapSystemComplex:
             raise ValueError(
                 "2 * half_max_degree must be >= max degree of Hamiltonian."
             )
-        self.param_dim = len(self.operator_dict)
+        self.param_dim_complex = len(self.operator_dict)
+        self.param_dim_real = 2 * len(self.operator_dict)
         self.tol = tol
         self.null_space_matrix = None
         self.linear_constraints = None
@@ -98,10 +99,7 @@ class BootstrapSystemComplex:
         np.ndarray
             The rescaled param.
         """
-        vec = self.single_trace_to_coefficient_vector(
-            SingleTraceOperator(data={(): 1}), return_null_basis=True
-        )
-        return param / vec.dot(param)
+        raise NotImplementedError
 
     def build_null_space_matrix(
         self, additional_constraints: Optional[list[SingleTraceOperator]] = None
@@ -186,12 +184,13 @@ class BootstrapSystemComplex:
         self, st_operator: SingleTraceOperator, return_null_basis: bool = False
     ) -> tuple[np.ndarray, np.ndarray]:
         """
-        Map a single trace operator to the vector of coefficients, v_i.
-        As the numerical implementation assumes real-valued objects, this
-        will be returned as two real vectors - vR and vI, with the full
-        vector being v = vR + i vI.
+        Map a single trace operator to the (in general complex) vector of coefficients.
+        Here, a real representation for the *operators* will be used, meaning that a
+        general single trace operator will be written as <tr(O)> = sum_i a_i v_i.
 
-        Optionally returns the vectors in the null basis, u_a = v_i K_{ia}
+        Optionally returns the vectors in the null basis. The null basis transformation
+        acts on a real representation of the operator basis elements, i.e. the operator above
+        is first written as sum_i a_i (vR_i + i vI_i), so that the coefficient vector is [a, a].
 
         Parameters
         ----------
@@ -209,13 +208,18 @@ class BootstrapSystemComplex:
         """
         # validate
         self.validate_operator(operator=st_operator)
-        vec = [0] * self.param_dim
+
+        # build the complex-basis vector of coefficients
+        vec = [0] * self.param_dim_complex
         for op, coeff in st_operator:
             idx = self.operator_dict[op]
             vec[idx] = coeff
         vec = np.asarray(vec)
         if not return_null_basis:
             return vec
+
+        # return the real-basis vector of coefficients and convert to null space
+        vec = np.concatenate((vec, vec))
         return vec @ self.get_null_space_matrix()
 
     def double_trace_to_coefficient_matrix(self, dt_operator: DoubleTraceOperator):
@@ -498,16 +502,25 @@ class BootstrapSystemComplex:
         NOTE: Not sure if it's a good idea to store the constraints, may become memory intensive.
 
         NOTE: In this implementation of the bootstrap, the constraints are complex-valued. However,
-        the subsequent operations assume that the objects are real-valued. To address this, v will be
-        made real by stacking the real and imaginary parts, as in v = [vR, vI]. The linear matrix will
-        then be block diagonal
+        the subsequent operations assume that the objects are real-valued.
 
-        L = [
-            [LR, 0],
-            [0, Li]
-            ]
+        To address this, v = vR + i vI will be made real by stacking the real and imaginary parts,
+        as in V = [vR, vI].
 
-        so that L v = [LR vR, LI vI]
+        The constraints L v = 0 can also be decomposed into real and imaginary parts, let L_ij = X_ij + i Y_ij
+        be the real and imaginary components of the constraint coefficients. So then
+
+        (L v)_i = L_ij (vR_j + i vI_j) = (X_ij + i Y_ij) (vR_j + i vI_j)
+                = (X_ij vR_j - Y_ij vI_j) + i (Y_ij vR_j + X_ij vI_j)
+
+        Note that the real and imaginary parts of the equation must separately hold.
+        These can be jointly written as LL V = 0, where
+
+        LL = [[X, -Y],
+            [Y, X]]
+
+        Note also that a permutation of the rows will not affect the content of the
+        constraints.
 
         Returns
         -------
@@ -528,46 +541,51 @@ class BootstrapSystemComplex:
         index_value_dict = {}
         constraint_idx = 0
 
-        # real part LR
-        # for sum_k z_k v_k = 0 this becomes sum_k (x_k v_R^k - y_k v_I^i)
-        # where z_k = x_k + i y_k
+        # loop over operators
         for st_operator in self.linear_constraints:
             for op_str, coeff in st_operator:
                 index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.real(coeff)
-                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim)] = -np.imag(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim_complex)] = -np.imag(coeff)
+            constraint_idx += 1
+
+        # imaginary part (Y_ij vR_j + X_ij vI_j)
+        for st_operator in self.linear_constraints:
+            for op_str, coeff in st_operator:
+                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.imag(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim_complex)] = np.real(coeff)
             constraint_idx += 1
 
         # impose the reality constraints <tr(O^{dagger})> = <tr(O)>* (real part)
-        # if o1^{dagger} = o2, then the condition is Re(v1) - Re(v2) = 0
+        # if O1^{dagger} = O2, and <tr(O1)> = vR_1 + i vI_1, <tr(O2)> = vR_2 + i vI_2
+        # then the condition becomes
+        # vR_1 = vR_2 and vI_1 = - vI_2
+        # Note that Hermitian operators must be treated separately, else the dictionary encoding will be incorrect
         for op_str, op_idx in self.operator_dict.items():
+
             op_str_reversed = op_str[::-1]
             op_reversed_idx = self.operator_dict[op_str_reversed]
-            index_value_dict[(constraint_idx, op_idx)] = 1
-            index_value_dict[(constraint_idx, op_reversed_idx)] = -1
-            constraint_idx += 1
 
-        # imaginary part LI
-        # for sum_k z_k v_k = 0 this becomes sum_k (x_k v_I^k + y_k v_R^i)
-        # where z_k = x_k + i y_k
-        for st_operator in self.linear_constraints:
-            for op_str, coeff in st_operator:
-                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim)] = np.real(coeff)
-                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.imag(coeff)
-            constraint_idx += 1
+            # Hermitian operators: set imaginary part to zero
+            if op_reversed_idx == op_idx:
+                index_value_dict[(constraint_idx, op_idx + self.param_dim_complex)] = 1
+                constraint_idx += 1
 
-        # impose the reality constraints <tr(O^{dagger})> = <tr(O)>* (imaginary part)
-        # if o1^{dagger} = o2, then the condition is Im(v1) + Im(v2) = 0
-        for op_str, op_idx in self.operator_dict.items():
-            op_str_reversed = op_str[::-1]
-            op_reversed_idx = self.operator_dict[op_str_reversed]
-            index_value_dict[(constraint_idx, op_idx + self.param_dim)] = 1
-            index_value_dict[(constraint_idx, op_reversed_idx + self.param_dim)] = 1
-            constraint_idx += 1
+            # non-Hermitian operators
+            else:
+                # real part
+                index_value_dict[(constraint_idx, op_idx)] = 1
+                index_value_dict[(constraint_idx, op_reversed_idx)] = -1
+                constraint_idx += 1
+
+                # imaginary part
+                index_value_dict[(constraint_idx, op_idx + self.param_dim_complex)] = 1
+                index_value_dict[(constraint_idx, op_reversed_idx + self.param_dim_complex)] = 1
+                constraint_idx += 1
 
         # return the constraint matrix
         return create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
-            matrix_shape=(constraint_idx, 2 * self.param_dim),
+            matrix_shape=(constraint_idx, 2 * self.param_dim_complex),
         )
 
     def build_quadratic_constraints(self) -> dict[str, np.ndarray]:
@@ -617,15 +635,20 @@ class BootstrapSystemComplex:
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
 
-            print(f"constraint: lhs = {lhs}, rhs = {rhs}")
+            #print(f"constraint: lhs = {lhs}, rhs = {rhs}")
 
-            # initialize the quadratic constraint matrix
+            # retrieve the vectorized form of the linear and quadratic terms
+            # Note: these will be complex-valued and in the complex operator basis
             linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
             quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
 
-            # build the vectors [vR, 0] and [0, vI] for the two sets of constraints (real and imaginary)
-            linear_constraint_vectorR = np.concatenate((linear_constraint_vector.real, 0 * linear_constraint_vector.imag))
-            linear_constraint_vectorI = np.concatenate((0 * linear_constraint_vector.real, linear_constraint_vector.imag))
+            # convert to real operator basis, and split each constraint into a real and imaginary part
+            # sum_k z_k v_k = sum_k (x_k vR_k - y_k vI_k) + i sum_k (y_k vR_k + x_k vI_k)
+            # so that the real vector is [real(z), - imag(z)] and the imaginary term is [imag(z), real(z)]
+            linear_constraint_vectorR = np.concatenate((linear_constraint_vector.real, -linear_constraint_vector.imag))
+            linear_constraint_vectorI = np.concatenate((linear_constraint_vector.imag, linear_constraint_vector.real))
+
+            # HERE!!!
 
             # rewrite the quadratic constraints in terms of real variables
             # this entails two things:
@@ -634,20 +657,12 @@ class BootstrapSystemComplex:
             #      acting on the stacked parameter vector [vR, vI]
             qR = quadratic_matrix.real
             qI = quadratic_matrix.imag
-            #print(type(quadratic_matrix), type(qR), type(qI))
-            #assert np.allclose(quadratic_matrix.todense(), (qR + 1j * qI).todense())
 
             QR = bmat([[qR, -qI], [-qI, -qR]], format='coo')
             QI = bmat([[qI, qR], [qR, -qI]], format='coo')
 
-            print('\nBEFORE')
-            print(np.sum(np.abs(QR)))
-            print(np.sum(np.abs(QI)))
-            print('AFTER')
-
             # transform to null basis
             # the minus sign is very important: (-RHS + LHS = 0)
-            #linear_constraint_vector = linear_constraint_vector @ null_space_matrix
             linear_constraint_vectorR = linear_constraint_vectorR @ null_space_matrix
             linear_constraint_vectorI = linear_constraint_vectorI @ null_space_matrix
 
@@ -657,14 +672,6 @@ class BootstrapSystemComplex:
             QI = (
                 -null_space_matrix.T @ QI @ null_space_matrix
             )
-
-            print(np.sum(np.abs(QR)))
-            print(np.sum(np.abs(QI)))
-
-            #print(f"linear_constraint_vectorR.shape = {linear_constraint_vectorR.shape}")
-            #print(f"linear_constraint_vectorI.shape = {linear_constraint_vectorI.shape}")
-            #print(f"QR.shape = {QR.shape}")
-            #print(f"QI.shape = {QI.shape}")
 
             # reshape the (d, d) matrices to (1, d^2) matrices
             QR = QR.reshape((1, self.param_dim_null**2))
@@ -700,8 +707,6 @@ class BootstrapSystemComplex:
                     quadratic_terms.append(QI)
 
         print(f"len(quadratic_terms) = {len(quadratic_terms)}")
-
-        assert 1 == 0
 
         if self.simplify_quadratic and len(additional_constraints) > 0:
             print(
