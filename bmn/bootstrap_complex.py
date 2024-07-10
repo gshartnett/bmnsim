@@ -4,13 +4,17 @@ from typing import (
     Optional,
     Union,
 )
+import os
 import numpy as np
+import pickle
 from scipy.sparse import (
     coo_matrix,
     csr_matrix,
     hstack,
     vstack,
-    bmat
+    bmat,
+    save_npz,
+    load_npz
 )
 
 from bmn.algebra import (
@@ -42,6 +46,7 @@ class BootstrapSystemComplex:
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
+        save_path: Optional[str]=None,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -62,6 +67,10 @@ class BootstrapSystemComplex:
         self.quadratic_constraints = None
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
+        if save_path is not None:
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+        self.save_path = save_path
         self._validate()
 
     def _validate(self):
@@ -83,6 +92,25 @@ class BootstrapSystemComplex:
                     raise ValueError(
                         f"Invalid operator: constrains term {op_str} which is not in operator_basis."
                     )
+
+    def load_constraints(self):
+        if self.save_path is None:
+            raise ValueError("Error, no save path provided.")
+        if not os.path.exists(self.save_path):
+            raise ValueError(f"Error, save path {self.save_path} does not exist.")
+
+        # load the linear constraints
+        with open(self.save_path + "/linear_constraints_data.pkl", 'rb') as f:
+            loaded_data = pickle.load(f)
+        self.linear_constraints = [SingleTraceOperator(data=data) for data in loaded_data]
+
+        # load the cyclic quadratic constraints
+        with open(self.save_path + "/cyclic_quadratic.pkl", 'rb') as f:
+            loaded_data = pickle.load(f)
+        self.quadratic_constraints = {key: {'lhs': SingleTraceOperator(data=value['lhs']), 'rhs': DoubleTraceOperator(data=value['rhs'])} for key, value in loaded_data.items()}
+
+        self.null_space_matrix = load_npz(self.save_path + "/null_space_matrix.npz")
+        self.param_dim_null = self.null_space_matrix.shape[1]
 
     def scale_param_to_enforce_normalization(self, param: np.ndarray) -> np.ndarray:
         """
@@ -113,6 +141,8 @@ class BootstrapSystemComplex:
         self.null_space_matrix = null_space_matrix
         self.param_dim_null = self.null_space_matrix.shape[1]
         print(f"Null space dimension (number of parameters) = {self.param_dim_null}")
+        if self.save_path is not None:
+            save_npz(self.save_path + "/null_space_matrix.npz", null_space_matrix)
         return
 
     def get_null_space_matrix(self) -> np.ndarray:
@@ -482,6 +512,16 @@ class BootstrapSystemComplex:
         linear_constraints.extend(
             [self.matrix_system.hermitian_conjugate(op) for op in linear_constraints]
         )
+
+        # save the constraints
+        if self.save_path is not None:
+            with open(self.save_path + "/linear_constraints_data.pkl", 'wb') as f:
+                pickle.dump([constraint.data for constraint in linear_constraints], f)
+            with open(self.save_path + "/cyclic_quadratic.pkl", 'wb') as f:
+                cyclic_data_dict = {}
+                for key, value in cyclic_quadratic.items():
+                    cyclic_data_dict[key] = {'lhs': value['lhs'].data, 'rhs': value['rhs'].data}
+                pickle.dump(cyclic_data_dict, f)
 
         return linear_constraints, cyclic_quadratic
 

@@ -80,6 +80,7 @@ def run(nu, L):
         half_max_degree=L,
         odd_degree_vanish=False,
         simplify_quadratic=False,
+        save_path="../data/mini_bmn",
     )
 
     bootstrap.get_null_space_matrix()
@@ -95,6 +96,8 @@ def run(nu, L):
         reg=5e-4,
         eps=5e-4,
     )
+
+    np.save(bootstrap.save_path + "/param.npy", param)
 
     energy = bootstrap.get_operator_expectation_value(
         st_operator=hamiltonian,
