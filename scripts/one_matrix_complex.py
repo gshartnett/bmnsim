@@ -5,7 +5,7 @@ from bmn.algebra import (
     MatrixSystem,
     SingleTraceOperator,
 )
-from bmn.bootstrap import BootstrapSystem
+from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize, minimal_eigval
 from bmn.brezin import compute_Brezin_energy, compute_Brezin_energy_Han_conventions
@@ -46,24 +46,24 @@ def run_one_matrix(g, L, init=None):
 
     # scale variables as P = sqrt(N) P', X = sqrt(N) X'
     hamiltonian = SingleTraceOperator(
-        data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): 7}
+        data={("P", "P"): 1, ("X", "X"): 1, ("X", "X", "X", "X"): g}
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
     gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
 
-    bootstrap = BootstrapSystem(
+    bootstrap = BootstrapSystemComplex(
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
         half_max_degree=L,
         odd_degree_vanish=True,
-        simplify_quadratic=True,
+        simplify_quadratic=False,
     )
 
     bootstrap.get_null_space_matrix()
 
-    disable_debug()
+    #disable_debug()
 
     param, success = minimize(
         bootstrap=bootstrap,
@@ -75,15 +75,6 @@ def run_one_matrix(g, L, init=None):
         reg=5e-4,
         eps=5e-4,
     )
-
-    """
-    for op in bootstrap.operator_list:
-        vec = bootstrap.single_trace_to_coefficient_vector(
-            st_operator=SingleTraceOperator(data={op: 1}), return_null_basis=True
-        )
-        op_expectation_value = vec @ param
-        print(f"op = {op}, EV = {op_expectation_value}")
-    """
 
     energy = bootstrap.get_operator_expectation_value(
         st_operator=hamiltonian,

@@ -323,6 +323,7 @@ def minimize(
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
+    vec = vec.real # TODO check this!
 
     # the loss function to minimize, i.e., the value of op
     # vec = operator_to_vector(sol, op)
