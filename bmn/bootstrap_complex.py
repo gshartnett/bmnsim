@@ -4,7 +4,6 @@ from typing import (
     Optional,
     Union,
 )
-
 import numpy as np
 from scipy.sparse import (
     coo_matrix,
@@ -190,7 +189,7 @@ class BootstrapSystemComplex:
 
         Optionally returns the vectors in the null basis. The null basis transformation
         acts on a real representation of the operator basis elements, i.e. the operator above
-        is first written as sum_i a_i (vR_i + i vI_i), so that the coefficient vector is [a, a].
+        is first written as sum_i z_i (vR_i + i vI_i), so that the coefficient vector is [z, z].
 
         Parameters
         ----------
@@ -832,7 +831,10 @@ class BootstrapSystemComplex:
                 # tally up number of anti-hermitian operators, and add (-1) factor if odd
                 num_antihermitian_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
                 sign = (-1) ** num_antihermitian_ops
+
+                # grab the index of the operator O_1^dag O_2
                 index_map = self.operator_dict[op_str1 + op_str2]
+
                 for k in range(null_space_matrix.shape[1]):
                     x = sign * null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
@@ -878,9 +880,18 @@ class BootstrapSystemComplex:
 
         return bootstrap_matrix
 
-    def get_operator_expectation_value(self, st_operator: SingleTraceOperator, param: np.ndarray) -> float:
+    def get_operator_expectation_value(
+            self,
+            st_operator: SingleTraceOperator,
+            param: np.ndarray
+            ) -> float:
+        param_real = (self.null_space_matrix @ param)[:self.param_dim_complex]
+        param_imag = (self.null_space_matrix @ param)[self.param_dim_complex:]
+        param_complex = param_real + 1j * param_imag
+
         vec = self.single_trace_to_coefficient_vector(
-            st_operator=st_operator, return_null_basis=True
-        )
-        op_expectation_value = vec @ param
+                    st_operator=st_operator, return_null_basis=False
+                )
+
+        op_expectation_value = vec @ param_complex
         return op_expectation_value

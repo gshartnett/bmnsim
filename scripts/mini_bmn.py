@@ -14,16 +14,16 @@ from bmn.solver import minimize
 def run(nu, L):
 
     matrix_system = MatrixSystem(
-        operator_basis=["X0", "X1", "X2", "Pi0", "Pi1", "Pi2"],
+        operator_basis=["X0", "X1", "X2", "P0", "P1", "P2"],
         commutation_rules_concise={
-            ("Pi0", "X0"): 1,
-            ("Pi1", "X1"): 1,
-            ("Pi2", "X2"): 1,
+            ("P0", "X0"): -1j,
+            ("P1", "X1"): -1j,
+            ("P2", "X2"): -1j,
         },
         hermitian_dict={
-            "Pi0": False,
-            "Pi1": False,
-            "Pi2": False,
+            "P0": True,
+            "P1": True,
+            "P2": True,
             "X0": True,
             "X1": True,
             "X2": True,
@@ -34,9 +34,9 @@ def run(nu, L):
     hamiltonian = SingleTraceOperator(
         data={
             # kinetic term
-            ("Pi0", "Pi0"): -1 / 2,
-            ("Pi1", "Pi1"): -1 / 2,
-            ("Pi2", "Pi2"): -1 / 2,
+            ("P0", "P0"): 1 / 2,
+            ("P1", "P1"): 1 / 2,
+            ("P2", "P2"): 1 / 2,
             # quadratic term
             ("X0", "X0"): nu**2 / 2,
             ("X1", "X1"): nu**2 / 2,
@@ -63,12 +63,12 @@ def run(nu, L):
 
     gauge = MatrixOperator(
         data={
-            ("X0", "Pi0"): 1,
-            ("Pi0", "X0"): -1,
-            ("X1", "Pi1"): 1,
-            ("Pi1", "X1"): -1,
-            ("X2", "Pi2"): 1,
-            ("Pi2", "X2"): -1,
+            ("X0", "P0"): 1j,
+            ("P0", "X0"): -1j,
+            ("X1", "P1"): 1j,
+            ("P1", "X1"): -1j,
+            ("X2", "P2"): 1j,
+            ("P2", "X2"): -1j,
             (): 3,
         }
     )
@@ -96,19 +96,11 @@ def run(nu, L):
         eps=5e-4,
     )
 
-    """
-    for op in bootstrap.operator_list:
-        vec = bootstrap.single_trace_to_coefficient_vector(
-            st_operator=SingleTraceOperator(data={op: 1}), return_null_basis=True
+    energy = bootstrap.get_operator_expectation_value(
+        st_operator=hamiltonian,
+        param=param
         )
-        op_expectation_value = vec @ param
-        print(f"op = {op}, EV = {op_expectation_value}")
-    """
 
-    vec = bootstrap.single_trace_to_coefficient_vector(
-        st_operator=hamiltonian, return_null_basis=True
-    )
-    energy = vec @ param
     print(f"problem success: {success}, min energy found: {energy:.6f}")
     return success, energy, param
 
