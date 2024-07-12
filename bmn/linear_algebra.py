@@ -55,13 +55,16 @@ def create_sparse_matrix_from_dict(
         data_values.append(value)
 
     # convert lists to numpy arrays
-    row_indices = np.array(row_indices)
-    column_indices = np.array(column_indices)
-    data_values = np.array(data_values)
+    #row_indices = np.array(row_indices)
+    #column_indices = np.array(column_indices)
+    #data_values = np.array(data_values)
+
+    # extract row indices, column indices, and values directly
+    rows, cols, data = zip(*((row, col, value) for (row, col), value in index_value_dict.items()))
 
     # create the sparse matrix
     sparse_matrix = coo_matrix(
-        (data_values, (row_indices, column_indices)), shape=matrix_shape
+        (data, (rows, cols)), shape=matrix_shape
     )
 
     return sparse_matrix

@@ -1,5 +1,6 @@
 import fire
 import numpy as np
+import sys, os
 
 from bmn.algebra import (
     MatrixOperator,
@@ -9,7 +10,6 @@ from bmn.algebra import (
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
-
 
 def run(nu, L):
 
@@ -77,21 +77,21 @@ def run(nu, L):
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
-        half_max_degree=L,
+        max_degree_L=L,
         odd_degree_vanish=False,
         simplify_quadratic=False,
-        save_path="../data/mini_bmn",
+        verbose=True,
+        save_path=f"data/mini_bmn_L_{L}",
+        fraction_operators_to_retain=0.2,
     )
 
-    bootstrap.get_null_space_matrix()
-
-    disable_debug()
+    #disable_debug()
 
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
         init_scale=1e2,
-        verbose=False,
+        verbose=True,
         maxiters=25,
         reg=5e-4,
         eps=5e-4,
