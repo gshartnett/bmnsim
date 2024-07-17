@@ -276,7 +276,7 @@ def minimize(
     op,
     init=None,
     init_scale=1.0,
-    op_cons=[SingleTraceOperator(data={(): 1})],
+    op_cons=[(SingleTraceOperator(data={(): 1}), 1)],
     maxiters=25,
     eps=5e-4,
     reg=5e-4,
@@ -332,7 +332,7 @@ def minimize(
     # extra constraints in op_cons, i.e., <o> = v for o, v in op_cons
     A_op = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b_op = np.zeros(0)
-    for op in op_cons:
+    for (op, value) in op_cons:
         A_op = sparse.vstack(
             [
                 A_op,
@@ -343,7 +343,7 @@ def minimize(
                 ),
             ]
         )
-        b_op = np.append(b_op, 1)
+        b_op = np.append(b_op, value)
 
     # initialize parameters from file or from scratch
     last_param = None

@@ -143,7 +143,6 @@ def get_row_space_sparse(matrix, tol: float = TOL):
             r (sparse matrix): a basis of the row space, of shape (K, N)
     """
     # debug("range_space: input shape {}".format(mat.shape))
-    # q, _, _, rank = sparseqr.qr(mat.transpose())
     q, _, _, rank = qr(matrix.transpose())
     r = csc_matrix(q)[:, :rank].transpose()
     # sanity check

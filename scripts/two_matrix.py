@@ -79,7 +79,7 @@ def run_two_matrix(g, L, m=1, init=None):
         half_max_degree=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        #symmetry_generators=symmetry_generators,
+        symmetry_generators=symmetry_generators,
     )
 
     bootstrap.get_null_space_matrix()

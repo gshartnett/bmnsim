@@ -179,8 +179,12 @@ class BootstrapSystemComplex:
 
         # generate all matrices appearing in the LxL multiplication table
         operator_list = list(set([op_str1[::-1] + op_str2 for op_str1 in operators for op_str2 in operators]))
-        print(f"Number of operators appearing in the L x L multiplication table (before truncation): {untruncated_number_of_operators}")
-        print(f"Number of operators appearing in the L x L multiplication table (after truncation): {len(operator_list)}")
+
+        if fraction_operators_to_retain < 1.0:
+            print(f"Number of operators appearing in the L x L multiplication table (before truncation): {untruncated_number_of_operators}")
+            print(f"Number of operators appearing in the L x L multiplication table (after truncation): {len(operator_list)}")
+        else:
+            print(f"Number of operators appearing in the L x L multiplication table: {len(operator_list)}")
 
         '''# arrange list in blocks of even/odd degree, i.e.,
         # operators_by_degree = {
@@ -338,34 +342,36 @@ class BootstrapSystemComplex:
 
         return mat
 
-    def generate_symmetry_constraints(self) -> list[SingleTraceOperator]:
+    def generate_symmetry_constraints(self, tol=1e-10) -> list[SingleTraceOperator]:
         """
-        Generate any symmetry constraints <[M,O]>=0 for O single trace
-        and M a symmetry generator.
+        Generate any symmetry constraints <[g,O]>=0 for O single trace
+        and g a symmetry generator.
 
         Returns
         -------
         list[SingleTraceOperator]
             The list of constraint terms.
         """
+        # skip if no symmetry generators are provided
         if self.symmetry_generators is None:
             return []
 
         constraints = []
         n = len(self.matrix_system.operator_basis)
-        M = np.zeros(shape=(n, n))
 
         # loop over symmetry generators
         for symmetry_generator in self.symmetry_generators:
 
-            # build the matrix M in [generator, operators_vector] = M operators_vector
+            # initialize a matrix M which will implement the linear action of the generator g
+            # M will obey [g, operators_vector] = M operators_vector
+            M = np.zeros(shape=(n, n), dtype=np.complex128)
             for i, op in enumerate(self.matrix_system.operator_basis):
                 commutator = self.matrix_system.single_trace_commutator(
                     symmetry_generator,
                     SingleTraceOperator(data={(op): 1})
                 )
                 for op, coeff in commutator:
-                    if coeff != 0:
+                    if np.abs(coeff) > tol:
                         j = self.matrix_system.operator_basis.index(op[0])
                         M[i,j] = coeff
 
@@ -373,10 +379,13 @@ class BootstrapSystemComplex:
             eig_values, old_to_new_variables = np.linalg.eig(M)
             old_to_new_variables = old_to_new_variables.T
 
-            #relations = {f"new_op_{i}": [(self.matrix_system.operator_basis[j], old_to_new_variables[i, j]) for j in range(n)] for i in range(n)}
-            assert np.all([np.array_equal(np.zeros(n), M @ old_to_new_variables[i] - eig_values[i] * old_to_new_variables[i]) for i in range(n)])
+            # confirm that the eigenvector relationship holds
+            assert np.all([np.allclose(np.zeros(n), M @ old_to_new_variables[i] - eig_values[i] * old_to_new_variables[i]) for i in range(n)])
 
-            # build all monomials using the new operators with degree < 2*L
+            # build all monomials using the new operators
+            if self.fraction_operators_to_retain != 1.0:
+                raise ValueError("Warning, symmetry constraints and dropping a fraction of operators are not simultaneously supported.")
+
             new_ops_dict = {f"new_op_{i}":i for i in range(n)}
             all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.max_degree_L + 1)}
             all_new_operators = [x for xs in all_new_operators.values() for x in xs]  # flatten
@@ -388,38 +397,20 @@ class BootstrapSystemComplex:
                 charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
 
                 # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
-                if charge != 0:
+                if np.abs(charge) > tol:
 
                     operator2 = {}
                     for i in range(len(operator)):
                         operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j]) for j in range(n)]
 
+                    # build the constraint single-trace operator
                     data = {}
                     for indices in list(product(range(n), repeat=len(operator))):
                         op = tuple([value[indices[idx]][0] for idx, value in enumerate(operator2.values())])
                         coeff = np.prod([value[indices[idx]][1] for idx, value in enumerate(operator2.values())])
-                        if np.abs(coeff) > 1e-10:
+                        if np.abs(coeff) > tol:
                             data[op] = data.get(op, 0) + coeff
-
-                    constraint_op = SingleTraceOperator(data=data)
-
-                # do a check
-                if charge == 0:
-                    if not self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op) == SingleTraceOperator(data={}):
-                        raise ValueError("Commutator of uncharged operator is not zero, but it should be.")
-                else:
-                    # if the constraint contains both real and imaginary terms, they must each hold separately
-                    if constraint_op.is_real():
-                        constraints.append(constraint_op)
-                    else:
-                        constraints.append(constraint_op.get_real_part())
-                        constraints.append(constraint_op.get_imag_part())
-
-
-        # check for SO(2) case - move to a unit test at some point
-        # also note sign is wrong for eigenvalue...
-        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"X1": 1, "X2": -1j})) == - 1j * SingleTraceOperator(data={"X1": 1, "X2": -1j})
-        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})) == - 1j * SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})
+                    constraints.append(SingleTraceOperator(data=data))
 
         return self.clean_constraints(constraints)
 
@@ -737,7 +728,6 @@ class BootstrapSystemComplex:
 
         if self.quadratic_constraints is None:
             self.build_linear_constraints()
-            print("I'm here!")
         quadratic_constraints = self.quadratic_constraints
 
         additional_constraints = []
@@ -854,16 +844,17 @@ class BootstrapSystemComplex:
         print(
             f"Number of quadratic constraints before row reduction: {num_constraints}"
         )
-        return {
-            "linear": linear_terms,
-            "quadratic": quadratic_terms,
-        }
+
+        print(f"NOTE: not applying row reduction...")
+        '''
+        for some reason this is taking forever...
         stacked_matrix = hstack([quadratic_terms, linear_terms])
         stacked_matrix = get_row_space_sparse(stacked_matrix)
         num_constraints = stacked_matrix.shape[0]
         linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
         quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
+        '''
 
         return {
             "linear": linear_terms,

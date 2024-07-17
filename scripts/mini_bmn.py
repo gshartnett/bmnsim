@@ -10,8 +10,13 @@ from bmn.algebra import (
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
+import pickle
+from datetime import datetime, timezone
 
-def run(nu, L):
+def run(nu, L, radius_squared=None, save_path=None):
+
+    if save_path is None:
+        save_path=f"data/mini_bmn_L_{L}"
 
     matrix_system = MatrixSystem(
         operator_basis=["X0", "X1", "X2", "P0", "P1", "P2"],
@@ -81,15 +86,28 @@ def run(nu, L):
         odd_degree_vanish=False,
         simplify_quadratic=False,
         verbose=True,
-        save_path=f"data/mini_bmn_L_{L}",
-        fraction_operators_to_retain=0.2,
+        save_path=save_path,
+        fraction_operators_to_retain=0.3,
     )
 
     #disable_debug()
 
+    extent_observable = SingleTraceOperator(data={('X0', 'X0'): 1, ('X1', 'X1'): 1, ('X2', 'X2'): 1})
+
+    if radius_squared is None:
+        op_cons = [
+            (SingleTraceOperator(data={(): 1}), 1),
+            ]
+    else:
+        op_cons=[
+            (SingleTraceOperator(data={(): 1}), 1),
+            (extent_observable, radius_squared),
+            ]
+
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
+        op_cons=op_cons,
         init_scale=1e2,
         verbose=True,
         maxiters=25,
@@ -104,10 +122,35 @@ def run(nu, L):
         param=param
         )
 
-    print(f"problem success: {success}, min energy found: {energy:.6f}")
+    extent_expectation = bootstrap.get_operator_expectation_value(
+        st_operator=extent_observable,
+        param=param
+        )
+
+    result = {
+        'param': param,
+        'energy': energy,
+        'extent': extent_expectation,
+        'L': L,
+        'nu': nu,
+        'success':success,
+        'fraction_operators_to_retain':bootstrap.fraction_operators_to_retain,
+    }
+
+    now_utc = datetime.now(timezone.utc)
+    now_utc = int(datetime.now(timezone.utc).timestamp() * 1000)
+    with open(save_path + f"/result_{now_utc}", 'wb') as f:
+        pickle.dump(result, f)
+
+    print(f"problem success: {success}, min energy found: {energy:.6f}, r^2: {extent_expectation:.6f}")
+
     return success, energy, param
 
 
 if __name__ == "__main__":
 
-    success, energy, param = fire.Fire(run)
+    #success, energy, param = fire.Fire(run)
+
+    for nu in np.linspace(0.5, 10, 10):
+        for radius_squared in np.linspace(0.5, 10, 10):
+            run(nu=nu, L=3, radius_squared=radius_squared)
