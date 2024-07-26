@@ -238,26 +238,24 @@ def get_quadratic_constraint_vector(
         The constraint vector and optionally its gradient.
     """
 
-    quadratic_array = quadratic_constraints["quadratic"]
-    linear_matrix = quadratic_constraints["linear"]
-
-    # compute the constraint vector
-    # quadratic_term = np.einsum(
-    #    "Iij, i, j -> I", quadratic_array, param_vector, param_vector
-    # )
-    # linear_term = np.einsum("Ii, i -> I", linear_matrix, param_vector)
-    # constraint_vector = quadratic_term + linear_term
+    # compute the constraints
+    # linear term
     linear_term = quadratic_constraints["linear"] @ param
+
+    # quadratic term
     param_product = np.outer(param, param).reshape((len(param) ** 2))
+    quadratic_array = quadratic_constraints["quadratic"]
     quadratic_term = quadratic_constraints["quadratic"] @ param_product
+
     constraint_vector = linear_term + quadratic_term
 
+    # return the constraint only if the gradient is not needed
     if not compute_grad:
         return constraint_vector
 
-    # is there a more efficient way to do this?
+    # compute the gradient
     num_constraints = linear_term.shape[0]
-    quadratic_array = np.asarray(quadratic_constraints["quadratic"].todense())
+    quadratic_array = np.asarray(quadratic_constraints["quadratic"].todense()) #this was crashing for the two-matrix L=4 case
     quadratic_array = quadratic_array.reshape((num_constraints, len(param), len(param)))
     # compute the gradient matrix
     constraint_grad_quadratic_term_1 = np.einsum("Iij, i -> Ij", quadratic_array, param)
@@ -267,6 +265,68 @@ def get_quadratic_constraint_vector(
         + constraint_grad_quadratic_term_1
         + constraint_grad_quadratic_term_2
     )
+
+    return constraint_vector, constraint_grad
+
+
+def get_quadratic_constraint_vector_in_progress_currently_wrong(
+    quadratic_constraints: dict[str, np.ndarray],
+    param: np.ndarray,
+    compute_grad: bool = False,
+) -> Union[np.ndarray, tuple[np.ndarray, np.ndarray]]:
+    """
+    Compute the quadratic constraint vector
+        A_{Iij} K_{ia} K_{jb} u_a u_b + B_{Ii} K_{Ia} u_a
+    and optionally the gradient
+        A_{Iij} K_{ia} K_{jb} u_b + A_{Iij} K_{ia} K_{jb} u_a + B_{Ii} K_{Ia}
+    for a given parameter vector (in the null space) u.
+
+    Parameters
+    ----------
+    quadratic_constraints : dict[str, np.ndarray]
+        The quadratic and linear parts of the quadratic/cyclic constraints,
+        represented as arrays.
+    param : np.ndarray
+        The parameter vector in the null space, u.
+    compute_grad : bool, optional
+        Controls whether the grad is computed, by default False.
+
+    Returns
+    -------
+    Union[np.ndarray, tuple[np.ndarray, np.ndarray]]
+        The constraint vector and optionally its gradient.
+    """
+
+    # compute the constraints
+    # linear term
+    linear_term = quadratic_constraints["linear"] @ param
+
+    # quadratic term
+    param_product = np.outer(param, param).reshape((len(param) ** 2))
+    quadratic_term = quadratic_constraints["quadratic"] @ param_product
+
+    constraint_vector = linear_term + quadratic_term
+
+    # return the constraint only if the gradient is not needed
+    if not compute_grad:
+        return constraint_vector
+
+    # compute the gradient
+    num_constraints = linear_term.shape[0]
+    param_times_ones = np.outer(param, np.ones(len(param))).reshape((1, len(param) ** 2))
+    ones_times_param = np.outer(np.ones(len(param)), param).reshape((1, len(param) ** 2))
+
+
+    constraint_grad_quadratic_term_1 = quadratic_constraints["quadratic"] * param_times_ones
+    constraint_grad_quadratic_term_2 = quadratic_constraints["quadratic"] * ones_times_param
+
+    constraint_grad = (
+        quadratic_constraints["linear"]
+        + constraint_grad_quadratic_term_1.reshape((num_constraints, len(param)))
+        + constraint_grad_quadratic_term_2.reshape((num_constraints, len(param)))
+    )
+
+    print(constraint_vector.shape, quadratic_constraints["quadratic"].shape, param_times_ones.shape)
 
     return constraint_vector, constraint_grad
 
@@ -383,6 +443,7 @@ def minimize(
 
     # penalty parameter for violation of constraints
     mu = 1
+
     # optimization steps
     for step in range(maxiters):
         debug(f"step = {step+1}/{maxiters}")
@@ -462,6 +523,7 @@ def minimize(
         ) - np.linalg.norm(cons_val)
         if -dcons > eps:
             mu = max(mu, -2 * dloss / dcons)
+
         # the merit function is -loss(param) - reg * norm(param) - mu * norm(constraint vector)
         acred = -dcons  # actual constraint reduction
         ared = -dloss + mu * acred  # actual merit increase
@@ -469,8 +531,8 @@ def minimize(
             A.dot(new_param) - b
         )  # predicted constraint reduction
         pred = -dloss + mu * pcred  # predicted merit increase
-        rho = ared / pred
-        # some sanity checks
+        rho = ared / pred        # some sanity checks
+
         if verbose:
             print(
                 "\t\tmu = {:.3f}, margin = {:+.3f}".format(

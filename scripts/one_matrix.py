@@ -61,7 +61,7 @@ def run_one_matrix(g, L, init=None):
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
-        half_max_degree=L,
+        max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
     )

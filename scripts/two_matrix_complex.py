@@ -103,6 +103,10 @@ def run(
         st_operator=hamiltonian,
         param=param
         )
+    energy_imag = np.imag(energy)
+    if np.abs(energy_imag) > 1e-10:
+        raise ValueError("Error, found appreciable imaginary component to energy.")
+    energy = np.real(energy)
 
     result = {
         'param': param,

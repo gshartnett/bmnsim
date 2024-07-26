@@ -56,12 +56,12 @@ def run_one_matrix(g, L, init=None):
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
-        half_max_degree=L,
+        max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=False,
     )
 
-    bootstrap.get_null_space_matrix()
+    bootstrap.build_null_space_matrix()
 
     #disable_debug()
 
@@ -80,6 +80,7 @@ def run_one_matrix(g, L, init=None):
         st_operator=hamiltonian,
         param=param
         )
+    energy = np.real(energy)
     exact_energy = compute_Brezin_energy_Han_conventions(g)
     print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
 
@@ -87,7 +88,7 @@ def run_one_matrix(g, L, init=None):
 
 
 def run_scan(L):
-    g_values = np.linspace(0.1, 10, 10)
+    g_values = np.linspace(0.1, 10, 15)
     results = {
         "g": g_values,
         "success": [],
@@ -124,6 +125,7 @@ def run_scan(L):
     ax.legend(frameon=False)
     ax.set_xlabel(r"$g$")
     ax.set_ylabel(r"$E_0/N^2$")
+    plt.savefig(f"figures/one_matrix_complex_scan_L_{L}.pdf")
     plt.show()
 
 

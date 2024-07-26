@@ -37,7 +37,7 @@ class BootstrapSystem:
         matrix_system: MatrixSystem,
         hamiltonian: SingleTraceOperator,
         gauge: MatrixOperator,
-        half_max_degree: int,
+        max_degree_L: int,
         symmetry_generators: list[SingleTraceOperator] = None,
         tol: float = 1e-10,
         odd_degree_vanish=True,
@@ -46,13 +46,13 @@ class BootstrapSystem:
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
         self.gauge = gauge
-        self.half_max_degree = half_max_degree
+        self.max_degree_L = max_degree_L
         self.odd_degree_vanish = odd_degree_vanish
-        self.operator_list = self.generate_operators(2 * half_max_degree)
+        self.operator_list = self.generate_operators(2 * max_degree_L)
         self.operator_dict = {op: idx for idx, op in enumerate(self.operator_list)}
-        if 2 * self.half_max_degree < self.hamiltonian.max_degree:
+        if 2 * self.max_degree_L < self.hamiltonian.max_degree:
             raise ValueError(
-                "2 * half_max_degree must be >= max degree of Hamiltonian."
+                "2 * max_degree_L must be >= max degree of Hamiltonian."
             )
         self.param_dim = len(self.operator_dict)
         self.tol = tol
@@ -172,10 +172,10 @@ class BootstrapSystem:
         # for building the bootstrap matrix
         bootstrap_basis_list = []
         for deg, op_list in operators.items():
-            if deg % 2 == 0 and deg <= self.half_max_degree:
+            if deg % 2 == 0 and deg <= self.max_degree_L:
                 bootstrap_basis_list.extend(op_list)
         for deg, op_list in operators.items():
-            if deg % 2 != 0 and deg <= self.half_max_degree:
+            if deg % 2 != 0 and deg <= self.max_degree_L:
                 bootstrap_basis_list.extend(op_list)
         self.bootstrap_basis_list = bootstrap_basis_list
         self.bootstrap_matrix_dim = len(bootstrap_basis_list)
@@ -274,7 +274,7 @@ class BootstrapSystem:
 
             # build all monomials using the new operators with degree < 2*L
             new_ops_dict = {f"new_op_{i}":i for i in range(n)}
-            all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.half_max_degree + 1)}
+            all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.max_degree_L + 1)}
             all_new_operators = [x for xs in all_new_operators.values() for x in xs]  # flatten
 
             # loop over all operators in the eigenbasis

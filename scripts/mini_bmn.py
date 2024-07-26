@@ -149,8 +149,8 @@ def run(nu, L, radius_squared=None, save_path=None):
 
 if __name__ == "__main__":
 
-    #success, energy, param = fire.Fire(run)
+    success, energy, param = fire.Fire(run)
 
-    for nu in np.linspace(0.5, 10, 10):
-        for radius_squared in np.linspace(0.5, 10, 10):
-            run(nu=nu, L=3, radius_squared=radius_squared)
+    #for nu in np.linspace(0.5, 10, 10):
+    #    for radius_squared in np.linspace(0.5, 10, 10):
+    #        run(nu=nu, L=3, radius_squared=radius_squared)
