@@ -72,7 +72,6 @@ class BootstrapSystem:
                 os.makedirs(self.save_path)
         print(f"NOTE Remember to incorporate more general basis changes!")
         self.verbose = verbose
-
         self._validate()
 
     def _validate(self):
@@ -729,10 +728,16 @@ class BootstrapSystem:
         list[SingleTraceOperator]
             The cleaned constraints.
         """
+        if self.verbose:
+            debug("Cleaning constraints...")
+
         cleaned_constraints = []
+
+        # use a set to check membership as this operation is O(1) vs O(N) for lists
+        set_of_all_operators = set(self.operator_list)
         for st_operator in constraints:
             if (
-                all([op in self.operator_list for op in st_operator.data])
+                all([op in set_of_all_operators for op in st_operator.data])
                 and not st_operator.is_zero()
             ):
                 cleaned_constraints.append(st_operator)
