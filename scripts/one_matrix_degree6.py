@@ -1,27 +1,27 @@
-import fire
-from typing import Optional
-import numpy as np
-import os
-import json
-from datetime import timezone
 import datetime
+import json
+import os
+from datetime import timezone
+from typing import Optional
+
+import fire
+import numpy as np
+
 from bmn.algebra import (
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
 )
 from bmn.bootstrap import BootstrapSystem
-from bmn.brezin import (
-    compute_Brezin_energy,
-)
+from bmn.brezin import compute_Brezin_energy
 from bmn.debug_utils import disable_debug
 from bmn.newton_solver import minimize as minimize_newton
 from bmn.solver import minimize as minimize_old
 
 
 def run_bootstrap(
-    g2: float, g4: float, g6: float, L: int, verbose:bool=False
-    ) -> tuple[bool, float, np.ndarray]:
+    g2: float, g4: float, g6: float, L: int, verbose: bool = False
+) -> tuple[bool, float, np.ndarray]:
     """
     Perform the bootstrap optimization for a single instance of the model.
 
@@ -71,11 +71,11 @@ def run_bootstrap(
         max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        verbose=False,
+        verbose=True,
         save_path=f"data/one_matrix_degree_6_L_{L}",
     )
 
-    #bootstrap.get_null_space_matrix()
+    bootstrap.build_null_space_matrix()
 
     disable_debug()
 
@@ -112,8 +112,11 @@ def run_bootstrap(
     }
 
     # compare against Brezin et al (if applicable)
-    if g2 == 1 and g6 == 0:
-        exact_energy = compute_Brezin_energy( g4 / 4)
+    # the factor of 4 is due to the difference in convention
+    # the factors of g2 are needed to restore dimensionality
+    if g2 > 0 and g6 == 0:
+        g_Brezin = g4 / (4 * g2 ** (3 / 2))
+        exact_energy = compute_Brezin_energy(g_Brezin) * g2 ** (1 / 2)
         print(
             f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}"
         )
@@ -133,7 +136,9 @@ def scan_bootstrap(L, verbose=False):
     g6_max = 16
 
     g2_values = [-1, 1]
-    g4_values = np.concatenate((np.linspace(-g4_max, 0, n_grid), np.linspace(0, g4_max, n_grid)[1:]))
+    g4_values = np.concatenate(
+        (np.linspace(-g4_max, 0, n_grid), np.linspace(0, g4_max, n_grid)[1:])
+    )
     g6_values = np.linspace(0, g6_max, n_grid)
 
     for g2 in g2_values:
@@ -144,18 +149,20 @@ def scan_bootstrap(L, verbose=False):
                 if (g6 > 0) or (g4 > 0):
 
                     # get the current UTC timestamp
-                    timestamp = datetime.datetime.now(timezone.utc).replace(tzinfo=timezone.utc).timestamp()
+                    timestamp = (
+                        datetime.datetime.now(timezone.utc)
+                        .replace(tzinfo=timezone.utc)
+                        .timestamp()
+                    )
                     timestamp = int(1e6 * timestamp)
 
-                    print(f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n")
+                    print(
+                        f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n"
+                    )
 
                     success, expectation_values, param = run_bootstrap(
-                        g2=g2,
-                        g4=g4,
-                        g6=g6,
-                        L=L,
-                        verbose=verbose
-                        )
+                        g2=g2, g4=g4, g6=g6, L=L, verbose=verbose
+                    )
 
                     # record results
                     result = {
@@ -168,8 +175,9 @@ def scan_bootstrap(L, verbose=False):
                     result = result | expectation_values
 
                     # print(f"Completed run for g={g}, success={success}, energy={energy}")
-                    with open(f"{path}/{timestamp}.json", 'w') as f:
+                    with open(f"{path}/{timestamp}.json", "w") as f:
                         json.dump(result, f)
+
 
 if __name__ == "__main__":
 

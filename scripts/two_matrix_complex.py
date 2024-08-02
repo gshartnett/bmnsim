@@ -21,16 +21,16 @@ from bmn.solver import minimize
 
 
 def run(
-        mass,
-        gauge_coupling,
-        L,
-        fraction_operators_to_retain=1.0,
-        save_path=None,
-        init=None,
-        ):
+    mass,
+    gauge_coupling,
+    L,
+    fraction_operators_to_retain=1.0,
+    save_path=None,
+    init=None,
+):
 
     if save_path is None:
-        save_path=f"data/two_matrix_complex_{L}"
+        save_path = f"data/two_matrix_complex_{L}"
 
     matrix_system = MatrixSystem(
         operator_basis=["X0", "X1", "P0", "P1"],
@@ -56,8 +56,8 @@ def run(
             ("X0", "X0"): mass**2,
             ("X1", "X1"): mass**2,
             # quadratic term (XY)
-            ("X0", "X1", "X0", "X1"): -gauge_coupling**2,
-            ("X1", "X0", "X1", "X0"): -gauge_coupling**2,
+            ("X0", "X1", "X0", "X1"): -(gauge_coupling**2),
+            ("X1", "X0", "X1", "X0"): -(gauge_coupling**2),
             ("X0", "X1", "X1", "X0"): gauge_coupling**2,
             ("X1", "X0", "X0", "X1"): gauge_coupling**2,
         }
@@ -74,8 +74,8 @@ def run(
     )
 
     symmetry_generators = [
-        SingleTraceOperator(data={('X0', 'P1'): 1, ('X1', 'P0'): -1})
-        ]
+        SingleTraceOperator(data={("X0", "P1"): 1, ("X1", "P0"): -1})
+    ]
 
     bootstrap = BootstrapSystemComplex(
         matrix_system=matrix_system,
@@ -86,13 +86,13 @@ def run(
         simplify_quadratic=False,
         verbose=True,
         save_path=save_path,
-        #symmetry_generators=symmetry_generators,
+        # symmetry_generators=symmetry_generators,
         fraction_operators_to_retain=fraction_operators_to_retain,
     )
 
     op_cons = [
         (SingleTraceOperator(data={(): 1}), 1),
-        ]
+    ]
 
     param, success = minimize_newton(
         bootstrap=bootstrap,
@@ -102,7 +102,7 @@ def run(
         maxiters=50,
     )
 
-    '''
+    """
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -113,32 +113,31 @@ def run(
         reg=5e-4,
         eps=5e-4,
     )
-    '''
+    """
 
     np.save(bootstrap.save_path + "/param.npy", param)
 
     energy = bootstrap.get_operator_expectation_value(
-        st_operator=hamiltonian,
-        param=param
-        )
+        st_operator=hamiltonian, param=param
+    )
     energy_imag = np.imag(energy)
     if np.abs(energy_imag) > 1e-10:
         raise ValueError("Error, found appreciable imaginary component to energy.")
     energy = np.real(energy)
 
     result = {
-        'param': param,
-        'energy': energy,
-        'L': L,
-        'mass': mass,
-        'gauge_coupling': gauge_coupling,
-        'success':success,
-        'fraction_operators_to_retain':bootstrap.fraction_operators_to_retain,
+        "param": param,
+        "energy": energy,
+        "L": L,
+        "mass": mass,
+        "gauge_coupling": gauge_coupling,
+        "success": success,
+        "fraction_operators_to_retain": bootstrap.fraction_operators_to_retain,
     }
 
     now_utc = datetime.now(timezone.utc)
     now_utc = int(datetime.now(timezone.utc).timestamp() * 1000)
-    with open(save_path + f"/result_{now_utc}", 'wb') as f:
+    with open(save_path + f"/result_{now_utc}", "wb") as f:
         pickle.dump(result, f)
 
     print(f"problem success: {success}, min energy found: {energy:.6f}")
@@ -146,9 +145,8 @@ def run(
     for op in bootstrap.operator_list:
         if len(op) <= 2:
             op_expectation_value = bootstrap.get_operator_expectation_value(
-                st_operator=SingleTraceOperator(data={op: 1}),
-                param=param
-                )
+                st_operator=SingleTraceOperator(data={op: 1}), param=param
+            )
             print(f"op = {op}, EV = {op_expectation_value}")
 
     return success, energy, param
@@ -158,6 +156,6 @@ if __name__ == "__main__":
 
     success, energy, param = fire.Fire(run)
 
-    #for nu in np.linspace(0.5, 10, 10):
+    # for nu in np.linspace(0.5, 10, 10):
     #    for radius_squared in np.linspace(0.5, 10, 10):
     #        run(nu=nu, L=3, radius_squared=radius_squared)

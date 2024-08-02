@@ -1,18 +1,21 @@
+import json
+import os
+import pickle
 from collections import Counter
 from itertools import product
 from typing import (
     Optional,
     Union,
 )
-import os, json, pickle
+
 import numpy as np
 from scipy.sparse import (
     coo_matrix,
     csr_matrix,
     hstack,
-    vstack,
-    save_npz,
     load_npz,
+    save_npz,
+    vstack,
 )
 
 from bmn.algebra import (
@@ -21,13 +24,13 @@ from bmn.algebra import (
     MatrixSystem,
     SingleTraceOperator,
 )
+from bmn.debug_utils import debug
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space_sparse,
-    get_row_space_sparse,
     get_real_coefficients_from_dict,
+    get_row_space_sparse,
 )
-from bmn.debug_utils import debug
 
 
 class BootstrapSystem:
@@ -45,8 +48,8 @@ class BootstrapSystem:
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        verbose: bool=False,
-        save_path: Optional[str]=None,
+        verbose: bool = False,
+        save_path: Optional[str] = None,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -56,9 +59,7 @@ class BootstrapSystem:
         self.operator_list = self.generate_operators(2 * max_degree_L)
         self.operator_dict = {op: idx for idx, op in enumerate(self.operator_list)}
         if 2 * self.max_degree_L < self.hamiltonian.max_degree:
-            raise ValueError(
-                "2 * max_degree_L must be >= max degree of Hamiltonian."
-            )
+            raise ValueError("2 * max_degree_L must be >= max degree of Hamiltonian.")
         self.param_dim = len(self.operator_dict)
         self.tol = tol
         self.null_space_matrix = None
@@ -124,7 +125,9 @@ class BootstrapSystem:
         linear_constraint_matrix = self.build_linear_constraints(additional_constraints)
 
         if self.verbose:
-            debug(f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}")
+            debug(
+                f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}"
+            )
 
         self.null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
         self.param_dim_null = self.null_space_matrix.shape[1]
@@ -190,14 +193,22 @@ class BootstrapSystem:
             raise ValueError(f"Error, save path {self.save_path} does not exist.")
 
         # load the linear constraints
-        with open(self.save_path + "/linear_constraints_data.pkl", 'rb') as f:
+        with open(self.save_path + "/linear_constraints_data.pkl", "rb") as f:
             loaded_data = pickle.load(f)
-        self.linear_constraints = [SingleTraceOperator(data=data) for data in loaded_data]
+        self.linear_constraints = [
+            SingleTraceOperator(data=data) for data in loaded_data
+        ]
 
         # load the cyclic quadratic constraints
-        with open(self.save_path + "/cyclic_quadratic.pkl", 'rb') as f:
+        with open(self.save_path + "/cyclic_quadratic.pkl", "rb") as f:
             loaded_data = pickle.load(f)
-        self.quadratic_constraints = {key: {'lhs': SingleTraceOperator(data=value['lhs']), 'rhs': DoubleTraceOperator(data=value['rhs'])} for key, value in loaded_data.items()}
+        self.quadratic_constraints = {
+            key: {
+                "lhs": SingleTraceOperator(data=value["lhs"]),
+                "rhs": DoubleTraceOperator(data=value["rhs"]),
+            }
+            for key, value in loaded_data.items()
+        }
 
         self.null_space_matrix = load_npz(self.save_path + "/null_space_matrix.npz")
         self.param_dim_null = self.null_space_matrix.shape[1]
@@ -242,8 +253,12 @@ class BootstrapSystem:
             idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
 
             # symmetrize
-            index_value_dict[(idx1, idx2)] = index_value_dict.get((idx1, idx2), 0) + coeff / 2
-            index_value_dict[(idx2, idx1)] = index_value_dict.get((idx2, idx1), 0) + coeff / 2
+            index_value_dict[(idx1, idx2)] = (
+                index_value_dict.get((idx1, idx2), 0) + coeff / 2
+            )
+            index_value_dict[(idx2, idx1)] = (
+                index_value_dict.get((idx2, idx1), 0) + coeff / 2
+            )
 
         mat = create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
@@ -277,44 +292,75 @@ class BootstrapSystem:
             M = np.zeros(shape=(n, n), dtype=np.complex128)
             for i, op in enumerate(self.matrix_system.operator_basis):
                 commutator = self.matrix_system.single_trace_commutator(
-                    symmetry_generator,
-                    SingleTraceOperator(data={(op): 1})
+                    symmetry_generator, SingleTraceOperator(data={(op): 1})
                 )
                 for op, coeff in commutator:
                     if np.abs(coeff) > tol:
                         j = self.matrix_system.operator_basis.index(op[0])
-                        M[i,j] = coeff
+                        M[i, j] = coeff
 
             # build the change of variables matrix
             eig_values, old_to_new_variables = np.linalg.eig(M)
             old_to_new_variables = old_to_new_variables.T
 
             # confirm that the eigenvector relationship holds
-            assert np.all([np.allclose(np.zeros(n), M @ old_to_new_variables[i] - eig_values[i] * old_to_new_variables[i]) for i in range(n)])
+            assert np.all(
+                [
+                    np.allclose(
+                        np.zeros(n),
+                        M @ old_to_new_variables[i]
+                        - eig_values[i] * old_to_new_variables[i],
+                    )
+                    for i in range(n)
+                ]
+            )
 
             # build all monomials using the new operators with degree < 2*L
-            new_ops_dict = {f"new_op_{i}":i for i in range(n)}
-            all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.max_degree_L + 1)}
-            all_new_operators = [x for xs in all_new_operators.values() for x in xs]  # flatten
+            new_ops_dict = {f"new_op_{i}": i for i in range(n)}
+            all_new_operators = {
+                deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
+                for deg in range(1, 2 * self.max_degree_L + 1)
+            }
+            all_new_operators = [
+                x for xs in all_new_operators.values() for x in xs
+            ]  # flatten
 
             # loop over all operators in the eigenbasis
             for operator in all_new_operators:
 
                 # compute the charge under the symmetry
-                charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
+                charge = sum(
+                    [eig_values[new_ops_dict[basis_op]] for basis_op in operator]
+                )
 
                 # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
                 if np.abs(charge) > tol:
 
                     operator2 = {}
                     for i in range(len(operator)):
-                        operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j]) for j in range(n)]
+                        operator2[i] = [
+                            (
+                                self.matrix_system.operator_basis[j],
+                                old_to_new_variables[new_ops_dict[operator[i]], j],
+                            )
+                            for j in range(n)
+                        ]
 
                     # build the constraint single-trace operator
                     data = {}
                     for indices in list(product(range(n), repeat=len(operator))):
-                        op = tuple([value[indices[idx]][0] for idx, value in enumerate(operator2.values())])
-                        coeff = np.prod([value[indices[idx]][1] for idx, value in enumerate(operator2.values())])
+                        op = tuple(
+                            [
+                                value[indices[idx]][0]
+                                for idx, value in enumerate(operator2.values())
+                            ]
+                        )
+                        coeff = np.prod(
+                            [
+                                value[indices[idx]][1]
+                                for idx, value in enumerate(operator2.values())
+                            ]
+                        )
                         if np.abs(coeff) > tol:
                             data[op] = data.get(op, 0) + coeff
                     constraint_op = SingleTraceOperator(data=data)
@@ -326,7 +372,7 @@ class BootstrapSystem:
                         constraints.append(constraint_op.get_real_part())
                         constraints.append(constraint_op.get_imag_part())
 
-                '''
+                """
                 # check: charge 0 operators should commute with the generators
                 if np.abs(charge) < tol:
                     print('whoohoo')
@@ -342,12 +388,12 @@ class BootstrapSystem:
                     else:
                         constraints.append(constraint_op.get_real_part())
                         constraints.append(constraint_op.get_imag_part())
-                '''
+                """
 
         # check for SO(2) case - move to a unit test at some point
         # also note sign is wrong for eigenvalue...
-        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"X1": 1, "X2": -1j})) == - 1j * SingleTraceOperator(data={"X1": 1, "X2": -1j})
-        #assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})) == - 1j * SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})
+        # assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"X1": 1, "X2": -1j})) == - 1j * SingleTraceOperator(data={"X1": 1, "X2": -1j})
+        # assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})) == - 1j * SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})
 
         return self.clean_constraints(constraints)
 
@@ -377,7 +423,9 @@ class BootstrapSystem:
             )
 
             if self.verbose:
-                debug(f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return self.clean_constraints(constraints)
 
@@ -397,7 +445,9 @@ class BootstrapSystem:
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
 
             if self.verbose:
-                debug(f"Generating gauge constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating gauge constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return self.clean_constraints(constraints)
 
@@ -488,7 +538,9 @@ class BootstrapSystem:
                     quadratic_constraints[op_idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
 
             if self.verbose:
-                debug(f"Generating cyclic constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating cyclic constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return linear_constraints, quadratic_constraints
 
@@ -547,12 +599,15 @@ class BootstrapSystem:
 
         # save the constraints
         if self.save_path is not None:
-            with open(self.save_path + "/linear_constraints_data.pkl", 'wb') as f:
+            with open(self.save_path + "/linear_constraints_data.pkl", "wb") as f:
                 pickle.dump([constraint.data for constraint in linear_constraints], f)
-            with open(self.save_path + "/cyclic_quadratic.pkl", 'wb') as f:
+            with open(self.save_path + "/cyclic_quadratic.pkl", "wb") as f:
                 cyclic_data_dict = {}
                 for key, value in cyclic_quadratic.items():
-                    cyclic_data_dict[key] = {'lhs': value['lhs'].data, 'rhs': value['rhs'].data}
+                    cyclic_data_dict[key] = {
+                        "lhs": value["lhs"].data,
+                        "rhs": value["rhs"].data,
+                    }
                 pickle.dump(cyclic_data_dict, f)
 
         return linear_constraints, cyclic_quadratic
@@ -637,12 +692,13 @@ class BootstrapSystem:
 
         # add <1> = <1>^2
         normalization_constraint = {
-            'lhs': SingleTraceOperator(data={(): 1}),
-            'rhs': DoubleTraceOperator(data={((), ()): 1}),
+            "lhs": SingleTraceOperator(data={(): 1}),
+            "rhs": DoubleTraceOperator(data={((), ()): 1}),
         }
         quadratic_constraints[None] = normalization_constraint
 
         # loop over constraints
+        print("Building quadratic constraints...")
         for constraint_idx, (operator_idx, constraint) in enumerate(
             quadratic_constraints.items()
         ):
@@ -688,8 +744,8 @@ class BootstrapSystem:
             return self.build_quadratic_constraints()
 
         # map to sparse matrices
-        #print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
-        #print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
+        # print(f"quadratic_terms.shape = {np.asarray(quadratic_terms).shape}")
+        # print(f"linear_terms.shape = {np.asarray(linear_terms).shape}")
         quadratic_terms = vstack(quadratic_terms)
         linear_terms = vstack(linear_terms)
 
@@ -812,16 +868,18 @@ class BootstrapSystem:
             for idx2, op_str2 in enumerate(self.bootstrap_basis_list):
 
                 # tally up number of anti-hermitian operators, and add (-1) factor if odd
-                num_antihermitian_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
+                num_antihermitian_ops = sum(
+                    [not self.matrix_system.hermitian_dict[term] for term in op_str1]
+                )
                 sign = (-1) ** num_antihermitian_ops
                 index_map = self.operator_dict[op_str1 + op_str2]
                 for k in range(null_space_matrix.shape[1]):
                     x = sign * null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
-                        #print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
+                        # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
 
-        #return bootstrap_dict
+        # return bootstrap_dict
 
         # map to a sparse array
         bootstrap_array = np.zeros(
@@ -844,9 +902,7 @@ class BootstrapSystem:
         dim = self.bootstrap_matrix_dim
         bootstrap_array_sparse = self.build_bootstrap_table()
 
-        bootstrap_matrix = np.reshape(
-            bootstrap_array_sparse.dot(param), (dim, dim)
-        )
+        bootstrap_matrix = np.reshape(bootstrap_array_sparse.dot(param), (dim, dim))
 
         # verify that matrix is symmetric
         # the general condition is that the matrix is Hermitian, but we have made it real
@@ -856,11 +912,15 @@ class BootstrapSystem:
             (bootstrap_matrix - bootstrap_matrix.T), np.zeros_like(bootstrap_matrix)
         ):
             violation = np.max((bootstrap_matrix - bootstrap_matrix.T))
-            raise ValueError(f"Bootstrap matrix is not symmetric, violation = {violation}.")
+            raise ValueError(
+                f"Bootstrap matrix is not symmetric, violation = {violation}."
+            )
 
         return bootstrap_matrix
 
-    def get_operator_expectation_value(self, st_operator: SingleTraceOperator, param: np.ndarray) -> float:
+    def get_operator_expectation_value(
+        self, st_operator: SingleTraceOperator, param: np.ndarray
+    ) -> float:
         vec = self.single_trace_to_coefficient_vector(
             st_operator=st_operator, return_null_basis=True
         )

@@ -36,8 +36,11 @@ from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space_sparse,
 )
-#from bmn.solver import get_quadratic_constraint_vector_dense as get_quadratic_constraint_vector
-from bmn.solver import get_quadratic_constraint_vector_sparse as get_quadratic_constraint_vector
+
+# from bmn.solver import get_quadratic_constraint_vector_dense as get_quadratic_constraint_vector
+from bmn.solver import (
+    get_quadratic_constraint_vector_sparse as get_quadratic_constraint_vector,
+)
 
 
 def sdp_minimize(
@@ -48,12 +51,12 @@ def sdp_minimize(
     A2,
     b2,
     init,
-    radius = np.inf,
+    radius=np.inf,
     maxiters=10_000,
     eps=1e-4,
     reg=1e-4,
     verbose=True,
-    ):
+):
     """
     Finds the parameters such that
             1. All bootstrap tables are positive semidefinite;
@@ -108,7 +111,7 @@ def minimize(
     maxiters=25,
     verbose=True,
     savefile="",
-    ):
+):
 
     # get the quantities needed for numerics
     _ = bootstrap.build_linear_constraints().tocsr()
@@ -116,8 +119,8 @@ def minimize(
     print(f"Building bootstrap table")
     bootstrap_array_sparse = bootstrap.build_bootstrap_table()
 
-    quadratic_constraints['linear'] = quadratic_constraints['linear']
-    quadratic_constraints['quadratic'] = quadratic_constraints['quadratic']
+    quadratic_constraints["linear"] = quadratic_constraints["linear"]
+    quadratic_constraints["quadratic"] = quadratic_constraints["quadratic"]
 
     if init is None:
         # initial parameter vector
@@ -125,28 +128,28 @@ def minimize(
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
 
         # print(f"Initializing from all 1's")
-        #init = np.ones(shape=bootstrap.param_dim_null)
+        # init = np.ones(shape=bootstrap.param_dim_null)
 
         # print(f"Initializing from all 0's")
         # init = np.zeros(shape=bootstrap.param_dim_null)
 
-    #print(f"Rescale to normalize")
-    #init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
+    # print(f"Rescale to normalize")
+    # init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
 
     param = init
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
-    vec = vec.real # TODO check this!
+    vec = vec.real  # TODO check this!
 
     # the loss function to minimize, i.e., the value of op
     # vec = operator_to_vector(sol, op)
-    #loss = lambda param: vec.dot(param)
+    # loss = lambda param: vec.dot(param)
 
     # extra constraints in op_cons, i.e., <o> = v for o, v in op_cons
     A = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b = np.zeros(0)
-    for (op, value) in op_cons:
+    for op, value in op_cons:
         A = sparse.vstack(
             [
                 A,
@@ -169,20 +172,19 @@ def minimize(
             quadratic_constraints, param, compute_grad=True
         )
 
-        #for i in range(len(val)):
+        # for i in range(len(val)):
         #    print(f"val[i] = {val[i]}")
         #    print(f"grad val[i] = {np.max(np.abs(grad[i]))}")
 
-
-        #if step == 0:
+        # if step == 0:
         #    quadratic_constraint_scale_vector = 1/100 * np.abs(np.random.normal(size=10))
         #    print(quadratic_constraint_scale_vector)
-        #val = val / quadratic_constraint_scale_vector
-        #grad = grad / quadratic_constraint_scale_vector[:, None]
-        #print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
+        # val = val / quadratic_constraint_scale_vector
+        # grad = grad / quadratic_constraint_scale_vector[:, None]
+        # print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
 
-        #scale = 1e0
-        #if step > 1115:
+        # scale = 1e0
+        # if step > 1115:
         #    A = sparse.vstack([A, grad])
         #    b = np.append(b, (grad.dot(param) - val))
 
@@ -203,7 +205,7 @@ def minimize(
         )
 
         if param is None:
-            assert 1==0
+            assert 1 == 0
 
         # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
         val, grad = get_quadratic_constraint_vector(

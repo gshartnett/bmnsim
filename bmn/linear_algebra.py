@@ -55,17 +55,17 @@ def create_sparse_matrix_from_dict(
         data_values.append(value)
 
     # convert lists to numpy arrays
-    #row_indices = np.array(row_indices)
-    #column_indices = np.array(column_indices)
-    #data_values = np.array(data_values)
+    # row_indices = np.array(row_indices)
+    # column_indices = np.array(column_indices)
+    # data_values = np.array(data_values)
 
     # extract row indices, column indices, and values directly
-    rows, cols, data = zip(*((row, col, value) for (row, col), value in index_value_dict.items()))
+    rows, cols, data = zip(
+        *((row, col, value) for (row, col), value in index_value_dict.items())
+    )
 
     # create the sparse matrix
-    sparse_matrix = coo_matrix(
-        (data, (rows, cols)), shape=matrix_shape
-    )
+    sparse_matrix = coo_matrix((data, (rows, cols)), shape=matrix_shape)
 
     return sparse_matrix
 
@@ -97,7 +97,9 @@ def get_null_space_dense(matrix: np.matrix, tol: float = TOL) -> np.ndarray:
     verification_result = matrix.dot(null_space_matrix)
     violation = np.max(np.abs(verification_result))
     if not violation <= tol:
-        raise ValueError(f"Warning, null space condition not satisfied, violation = {violation}.")
+        raise ValueError(
+            f"Warning, null space condition not satisfied, violation = {violation}."
+        )
     return null_space_matrix
 
 
@@ -131,8 +133,11 @@ def get_null_space_sparse(matrix, tol: float = TOL):
     verification_result = matrix @ null_space_matrix
     violation = np.max(np.abs(verification_result))
     if not violation <= tol:
-        raise ValueError(f"Warning, null space condition not satisfied, violation = {violation}.")
+        raise ValueError(
+            f"Warning, null space condition not satisfied, violation = {violation}."
+        )
     return null_space_matrix
+
 
 def get_row_space_sparse(matrix, tol: float = TOL):
     """

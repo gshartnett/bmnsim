@@ -22,7 +22,7 @@ from bmn.solver import minimize
 def run(nu, L, radius_squared=None, save_path=None):
 
     if save_path is None:
-        save_path=f"data/mini_bmn_L_{L}"
+        save_path = f"data/mini_bmn_L_{L}"
 
     matrix_system = MatrixSystem(
         operator_basis=["X0", "X1", "X2", "P0", "P1", "P2"],
@@ -96,19 +96,21 @@ def run(nu, L, radius_squared=None, save_path=None):
         fraction_operators_to_retain=0.3,
     )
 
-    #disable_debug()
+    # disable_debug()
 
-    extent_observable = SingleTraceOperator(data={('X0', 'X0'): 1, ('X1', 'X1'): 1, ('X2', 'X2'): 1})
+    extent_observable = SingleTraceOperator(
+        data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}
+    )
 
     if radius_squared is None:
         op_cons = [
             (SingleTraceOperator(data={(): 1}), 1),
-            ]
+        ]
     else:
-        op_cons=[
+        op_cons = [
             (SingleTraceOperator(data={(): 1}), 1),
             (extent_observable, radius_squared),
-            ]
+        ]
 
     param, success = minimize(
         bootstrap=bootstrap,
@@ -124,31 +126,31 @@ def run(nu, L, radius_squared=None, save_path=None):
     np.save(bootstrap.save_path + "/param.npy", param)
 
     energy = bootstrap.get_operator_expectation_value(
-        st_operator=hamiltonian,
-        param=param
-        )
+        st_operator=hamiltonian, param=param
+    )
 
     extent_expectation = bootstrap.get_operator_expectation_value(
-        st_operator=extent_observable,
-        param=param
-        )
+        st_operator=extent_observable, param=param
+    )
 
     result = {
-        'param': param,
-        'energy': energy,
-        'extent': extent_expectation,
-        'L': L,
-        'nu': nu,
-        'success':success,
-        'fraction_operators_to_retain':bootstrap.fraction_operators_to_retain,
+        "param": param,
+        "energy": energy,
+        "extent": extent_expectation,
+        "L": L,
+        "nu": nu,
+        "success": success,
+        "fraction_operators_to_retain": bootstrap.fraction_operators_to_retain,
     }
 
     now_utc = datetime.now(timezone.utc)
     now_utc = int(datetime.now(timezone.utc).timestamp() * 1000)
-    with open(save_path + f"/result_{now_utc}", 'wb') as f:
+    with open(save_path + f"/result_{now_utc}", "wb") as f:
         pickle.dump(result, f)
 
-    print(f"problem success: {success}, min energy found: {energy:.6f}, r^2: {extent_expectation:.6f}")
+    print(
+        f"problem success: {success}, min energy found: {energy:.6f}, r^2: {extent_expectation:.6f}"
+    )
 
     return success, energy, param
 
@@ -157,6 +159,6 @@ if __name__ == "__main__":
 
     success, energy, param = fire.Fire(run)
 
-    #for nu in np.linspace(0.5, 10, 10):
+    # for nu in np.linspace(0.5, 10, 10):
     #    for radius_squared in np.linspace(0.5, 10, 10):
     #        run(nu=nu, L=3, radius_squared=radius_squared)

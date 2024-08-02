@@ -102,7 +102,9 @@ def sdp_init(
 
     # solve the above described optimization problem
     prob = cp.Problem(
-        cp.Minimize(cp.sum_squares(A @ param - b) + 0 * reg * cp.sum_squares(param - init)),
+        cp.Minimize(
+            cp.sum_squares(A @ param - b) + 0 * reg * cp.sum_squares(param - init)
+        ),
         constraints,
     )
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
@@ -114,7 +116,15 @@ def sdp_init(
 
 
 def sdp_relax(
-    bootstrap_array_sparse, A, b, init, radius, maxiters=10_000, eps=1e-4, relax_rate=0.8, verbose=True
+    bootstrap_array_sparse,
+    A,
+    b,
+    init,
+    radius,
+    maxiters=10_000,
+    eps=1e-4,
+    relax_rate=0.8,
+    verbose=True,
 ):
     """
     Finds the parameters such that
@@ -314,11 +324,22 @@ def get_quadratic_constraint_vector_sparse(
 
     # compute the gradient
     num_constraints = linear_term.shape[0]
-    quad_terms = [quadratic_constraints["quadratic"][i].reshape((len(param), len(param))) for i in range(num_constraints)]
-    quad_terms = vstack([csr_matrix(quad_term @ param + quad_term.T @ param) for quad_term in quad_terms])
+    quad_terms = [
+        quadratic_constraints["quadratic"][i].reshape((len(param), len(param)))
+        for i in range(num_constraints)
+    ]
+    quad_terms = vstack(
+        [
+            csr_matrix(quad_term @ param + quad_term.T @ param)
+            for quad_term in quad_terms
+        ]
+    )
     constraint_grad = quadratic_constraints["linear"] + quad_terms
 
-    return constraint_vector, constraint_grad.todense()
+    # I found that this is critical, without it the result is wrong
+    constraint_grad = constraint_grad.todense()
+
+    return constraint_vector, constraint_grad
 
 
 def minimize(
@@ -363,17 +384,17 @@ def minimize(
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
 
         # print(f"Initializing from all 1's")
-        #init = np.ones(shape=bootstrap.param_dim_null)
+        # init = np.ones(shape=bootstrap.param_dim_null)
 
         # print(f"Initializing from all 0's")
         # init = np.zeros(shape=bootstrap.param_dim_null)
 
-    #print(f"Rescale to normalize")
-    #init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
+    # print(f"Rescale to normalize")
+    # init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
     vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
-    vec = vec.real # TODO check this!
+    vec = vec.real  # TODO check this!
 
     # the loss function to minimize, i.e., the value of op
     # vec = operator_to_vector(sol, op)
@@ -382,7 +403,7 @@ def minimize(
     # extra constraints in op_cons, i.e., <o> = v for o, v in op_cons
     A_op = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b_op = np.zeros(0)
-    for (op, value) in op_cons:
+    for op, value in op_cons:
         A_op = sparse.vstack(
             [
                 A_op,
@@ -423,7 +444,7 @@ def minimize(
             verbose=verbose,
         )
         radius = np.linalg.norm(param) + 20
-        print(f'initial ||param||_2 = {np.linalg.norm(param)}, R={radius}')
+        print(f"initial ||param||_2 = {np.linalg.norm(param)}, R={radius}")
 
     # penalty parameter for violation of constraints
     mu = 1
@@ -437,11 +458,13 @@ def minimize(
             quadratic_constraints, param, compute_grad=True
         )
         if step == 0:
-            quadratic_constraint_scale_vector = 1/100 * np.abs(np.random.normal(size=10))
+            quadratic_constraint_scale_vector = (
+                1 / 100 * np.abs(np.random.normal(size=10))
+            )
             print(quadratic_constraint_scale_vector)
         val = val / quadratic_constraint_scale_vector
         grad = grad / quadratic_constraint_scale_vector[:, None]
-        #print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
+        # print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
 
         A = sparse.vstack([A_op, grad])
         b = np.append(b_op, grad.dot(param) - val)
@@ -468,14 +491,16 @@ def minimize(
         )
         if new_param is None:
             # wrongly infeasible
-            radius *= relax_rate # GSH used to be 0.9
-            print(f'  wrongly infeasible, changing radius from R={radius/relax_rate} to R={radius}')
+            radius *= relax_rate  # GSH used to be 0.9
+            print(
+                f"  wrongly infeasible, changing radius from R={radius/relax_rate} to R={radius}"
+            )
             continue
         # check progress
         cons_val = A.dot(param) - b
         maxcv = np.max(np.abs(cons_val))  # maximal constraint violation
         min_eig = minimal_eigval(bootstrap_array_sparse, param)
-        #if verbose:
+        # if verbose:
         if True:
             print(
                 "Step {}: \tloss = {:.5f}, maxcv = {:.5f}, radius = {:.3e}, min_eig = {:+.5f}".format(
@@ -506,7 +531,9 @@ def minimize(
         dcons = np.linalg.norm(
             np.append(
                 A_op.dot(new_param) - b_op,
-                get_quadratic_constraint_vector_sparse(quadratic_constraints, new_param),
+                get_quadratic_constraint_vector_sparse(
+                    quadratic_constraints, new_param
+                ),
             )
         ) - np.linalg.norm(cons_val)
         if -dcons > eps:
@@ -521,7 +548,7 @@ def minimize(
             A.dot(new_param) - b
         )  # predicted constraint reduction
         pred = -dloss + mu * pcred  # predicted merit increase
-        rho = ared / pred        # some sanity checks
+        rho = ared / pred  # some sanity checks
 
         if verbose:
             print(
@@ -538,9 +565,11 @@ def minimize(
             # accept
             if maxcv < eps and min_eig > -eps:
                 last_param = param
-                #radius *= 1.2
-                radius *= (2 - relax_rate) # GSH used to be 1.2
-                print(f"  accept, adjusting R from R = {radius/(2 - relax_rate)} to R = {radius}")
+                # radius *= 1.2
+                radius *= 2 - relax_rate  # GSH used to be 1.2
+                print(
+                    f"  accept, adjusting R from R = {radius/(2 - relax_rate)} to R = {radius}"
+                )
             param = new_param
             if savefile:
                 obs = linear_constraint_matrix.dot(param)

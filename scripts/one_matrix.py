@@ -87,7 +87,7 @@ def run_one_matrix(g, L, init=None, verbose=False):
         maxiters=50,
     )
 
-    '''
+    """
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -98,7 +98,7 @@ def run_one_matrix(g, L, init=None, verbose=False):
         reg=5e-3,
         eps=9e-4,
     )
-    '''
+    """
 
     """
     for op in bootstrap.operator_list:
@@ -110,11 +110,12 @@ def run_one_matrix(g, L, init=None, verbose=False):
     """
 
     energy = bootstrap.get_operator_expectation_value(
-        st_operator=hamiltonian,
-        param=param
-        )
+        st_operator=hamiltonian, param=param
+    )
     exact_energy = compute_Brezin_energy_Han_conventions(g)
-    print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
+    print(
+        f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}"
+    )
     print(f"energy error = {energy - exact_energy:.4e}")
     return success, energy, param
 
@@ -151,7 +152,7 @@ def run_scan(L):
                 results["energy"][i],
                 color="k",
                 zorder=10,
-                #label=f"Bootstrap L={L}, converged",
+                # label=f"Bootstrap L={L}, converged",
             )
 
     ax.legend(frameon=False)

@@ -1,20 +1,21 @@
+import os
+import pickle
 from collections import Counter
 from itertools import product
 from typing import (
     Optional,
     Union,
 )
-import os
+
 import numpy as np
-import pickle
 from scipy.sparse import (
+    bmat,
     coo_matrix,
     csr_matrix,
     hstack,
-    vstack,
-    bmat,
+    load_npz,
     save_npz,
-    load_npz
+    vstack,
 )
 
 from bmn.algebra import (
@@ -23,13 +24,13 @@ from bmn.algebra import (
     MatrixSystem,
     SingleTraceOperator,
 )
+from bmn.debug_utils import debug
 from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space_sparse,
-    get_row_space_sparse,
     get_real_coefficients_from_dict,
+    get_row_space_sparse,
 )
-from bmn.debug_utils import debug
 
 
 class BootstrapSystemComplex:
@@ -47,8 +48,8 @@ class BootstrapSystemComplex:
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        save_path: Optional[str]=None,
-        verbose: bool=False,
+        save_path: Optional[str] = None,
+        verbose: bool = False,
         fraction_operators_to_retain: float = 1.0,
     ):
         self.matrix_system = matrix_system
@@ -58,14 +59,11 @@ class BootstrapSystemComplex:
         self.odd_degree_vanish = odd_degree_vanish
         self.fraction_operators_to_retain = fraction_operators_to_retain
         self.operator_list = self.generate_operators_truncated(
-            L=max_degree_L,
-            fraction_operators_to_retain=fraction_operators_to_retain
-            )
+            L=max_degree_L, fraction_operators_to_retain=fraction_operators_to_retain
+        )
         self.operator_dict = {op: idx for idx, op in enumerate(self.operator_list)}
         if 2 * self.max_degree_L < self.hamiltonian.max_degree:
-            raise ValueError(
-                "2 * max_degree_L must be >= max degree of Hamiltonian."
-            )
+            raise ValueError("2 * max_degree_L must be >= max degree of Hamiltonian.")
         self.param_dim_complex = len(self.operator_dict)
         self.param_dim_real = 2 * len(self.operator_dict)
         self.tol = tol
@@ -108,14 +106,22 @@ class BootstrapSystemComplex:
             raise ValueError(f"Error, save path {self.save_path} does not exist.")
 
         # load the linear constraints
-        with open(self.save_path + "/linear_constraints_data.pkl", 'rb') as f:
+        with open(self.save_path + "/linear_constraints_data.pkl", "rb") as f:
             loaded_data = pickle.load(f)
-        self.linear_constraints = [SingleTraceOperator(data=data) for data in loaded_data]
+        self.linear_constraints = [
+            SingleTraceOperator(data=data) for data in loaded_data
+        ]
 
         # load the cyclic quadratic constraints
-        with open(self.save_path + "/cyclic_quadratic.pkl", 'rb') as f:
+        with open(self.save_path + "/cyclic_quadratic.pkl", "rb") as f:
             loaded_data = pickle.load(f)
-        self.quadratic_constraints = {key: {'lhs': SingleTraceOperator(data=value['lhs']), 'rhs': DoubleTraceOperator(data=value['rhs'])} for key, value in loaded_data.items()}
+        self.quadratic_constraints = {
+            key: {
+                "lhs": SingleTraceOperator(data=value["lhs"]),
+                "rhs": DoubleTraceOperator(data=value["rhs"]),
+            }
+            for key, value in loaded_data.items()
+        }
 
         self.null_space_matrix = load_npz(self.save_path + "/null_space_matrix.npz")
         self.param_dim_null = self.null_space_matrix.shape[1]
@@ -147,7 +153,9 @@ class BootstrapSystemComplex:
         linear_constraint_matrix = self.build_linear_constraints(additional_constraints)
 
         if self.verbose:
-            debug(f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}")
+            debug(
+                f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}"
+            )
 
         self.null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
         self.param_dim_null = self.null_space_matrix.shape[1]
@@ -159,34 +167,69 @@ class BootstrapSystemComplex:
     def generate_operators_truncated(self, L, fraction_operators_to_retain=1.0):
 
         # generate all operators with length <= L
-        operators = [[x for x in product(self.matrix_system.operator_basis, repeat=deg)] for deg in range(0, L + 1)]
-        operators = [x for operators_by_degree in operators for x in operators_by_degree]
+        operators = [
+            [x for x in product(self.matrix_system.operator_basis, repeat=deg)]
+            for deg in range(0, L + 1)
+        ]
+        operators = [
+            x for operators_by_degree in operators for x in operators_by_degree
+        ]
         print(f"Number of operators with length <= {L}: {len(operators)}")
 
         # truncate the set of operators considered
         if fraction_operators_to_retain < 1.0:
 
             # for reference find the number of operators in the multiplication table if we had not done the truncation
-            untruncated_number_of_operators = len(list(set([op_str1[::-1] + op_str2 for op_str1 in operators for op_str2 in operators])))
+            untruncated_number_of_operators = len(
+                list(
+                    set(
+                        [
+                            op_str1[::-1] + op_str2
+                            for op_str1 in operators
+                            for op_str2 in operators
+                        ]
+                    )
+                )
+            )
 
             # perform the truncation
             num_operators_to_retain = int(fraction_operators_to_retain * len(operators))
             operators_retain = set(operators[0:num_operators_to_retain])
-            operators = [op_str for op_str in operators_retain if op_str[::-1] in operators_retain]
+            operators = [
+                op_str
+                for op_str in operators_retain
+                if op_str[::-1] in operators_retain
+            ]
 
             # add back any conjugates
-            print(f"Number of operators with length <= {L} after truncation: {len(operators)}")
+            print(
+                f"Number of operators with length <= {L} after truncation: {len(operators)}"
+            )
 
         # generate all matrices appearing in the LxL multiplication table
-        operator_list = list(set([op_str1[::-1] + op_str2 for op_str1 in operators for op_str2 in operators]))
+        operator_list = list(
+            set(
+                [
+                    op_str1[::-1] + op_str2
+                    for op_str1 in operators
+                    for op_str2 in operators
+                ]
+            )
+        )
 
         if fraction_operators_to_retain < 1.0:
-            print(f"Number of operators appearing in the L x L multiplication table (before truncation): {untruncated_number_of_operators}")
-            print(f"Number of operators appearing in the L x L multiplication table (after truncation): {len(operator_list)}")
+            print(
+                f"Number of operators appearing in the L x L multiplication table (before truncation): {untruncated_number_of_operators}"
+            )
+            print(
+                f"Number of operators appearing in the L x L multiplication table (after truncation): {len(operator_list)}"
+            )
         else:
-            print(f"Number of operators appearing in the L x L multiplication table: {len(operator_list)}")
+            print(
+                f"Number of operators appearing in the L x L multiplication table: {len(operator_list)}"
+            )
 
-        '''# arrange list in blocks of even/odd degree, i.e.,
+        """# arrange list in blocks of even/odd degree, i.e.,
         # operators_by_degree = {
         #   0: [(), ('X', 'X'), ..., ]
         #   1: [('X'), ('P'), ..., ]
@@ -212,12 +255,11 @@ class BootstrapSystemComplex:
         for deg, op_list in operators_by_degree.items():
             if deg % 2 != 0 and deg <= self.max_degree_L:
                 bootstrap_basis_list.extend(op_list)
-        '''
+        """
         self.bootstrap_basis_list = operators
         self.bootstrap_matrix_dim = len(operators)
 
         return operator_list
-
 
     def generate_operators(self, max_degree: int) -> list[str]:
         """
@@ -242,7 +284,7 @@ class BootstrapSystemComplex:
         operator_list = [x for xs in operators.values() for x in xs]
 
         if self.max_num_operators is not None:
-            operator_list = operator_list[0: self.max_num_operators]
+            operator_list = operator_list[0 : self.max_num_operators]
             for op in operator_list:
                 op_reverse = op[::-1]
                 if op_reverse not in operator_list:
@@ -332,8 +374,12 @@ class BootstrapSystemComplex:
             idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
 
             # symmetrize
-            index_value_dict[(idx1, idx2)] = index_value_dict.get((idx1, idx2), 0) + coeff / 2
-            index_value_dict[(idx2, idx1)] = index_value_dict.get((idx2, idx1), 0) + coeff / 2
+            index_value_dict[(idx1, idx2)] = (
+                index_value_dict.get((idx1, idx2), 0) + coeff / 2
+            )
+            index_value_dict[(idx2, idx1)] = (
+                index_value_dict.get((idx2, idx1), 0) + coeff / 2
+            )
 
         mat = create_sparse_matrix_from_dict(
             index_value_dict=index_value_dict,
@@ -367,47 +413,80 @@ class BootstrapSystemComplex:
             M = np.zeros(shape=(n, n), dtype=np.complex128)
             for i, op in enumerate(self.matrix_system.operator_basis):
                 commutator = self.matrix_system.single_trace_commutator(
-                    symmetry_generator,
-                    SingleTraceOperator(data={(op): 1})
+                    symmetry_generator, SingleTraceOperator(data={(op): 1})
                 )
                 for op, coeff in commutator:
                     if np.abs(coeff) > tol:
                         j = self.matrix_system.operator_basis.index(op[0])
-                        M[i,j] = coeff
+                        M[i, j] = coeff
 
             # build the change of variables matrix
             eig_values, old_to_new_variables = np.linalg.eig(M)
             old_to_new_variables = old_to_new_variables.T
 
             # confirm that the eigenvector relationship holds
-            assert np.all([np.allclose(np.zeros(n), M @ old_to_new_variables[i] - eig_values[i] * old_to_new_variables[i]) for i in range(n)])
+            assert np.all(
+                [
+                    np.allclose(
+                        np.zeros(n),
+                        M @ old_to_new_variables[i]
+                        - eig_values[i] * old_to_new_variables[i],
+                    )
+                    for i in range(n)
+                ]
+            )
 
             # build all monomials using the new operators
             if self.fraction_operators_to_retain != 1.0:
-                raise ValueError("Warning, symmetry constraints and dropping a fraction of operators are not simultaneously supported.")
+                raise ValueError(
+                    "Warning, symmetry constraints and dropping a fraction of operators are not simultaneously supported."
+                )
 
-            new_ops_dict = {f"new_op_{i}":i for i in range(n)}
-            all_new_operators = {deg: [x for x in product(new_ops_dict.keys(), repeat=deg)] for deg in range(1, 2*self.max_degree_L + 1)}
-            all_new_operators = [x for xs in all_new_operators.values() for x in xs]  # flatten
+            new_ops_dict = {f"new_op_{i}": i for i in range(n)}
+            all_new_operators = {
+                deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
+                for deg in range(1, 2 * self.max_degree_L + 1)
+            }
+            all_new_operators = [
+                x for xs in all_new_operators.values() for x in xs
+            ]  # flatten
 
             # loop over all operators in the eigenbasis
             for operator in all_new_operators:
 
                 # compute the charge under the symmetry
-                charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
+                charge = sum(
+                    [eig_values[new_ops_dict[basis_op]] for basis_op in operator]
+                )
 
                 # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
                 if np.abs(charge) > tol:
 
                     operator2 = {}
                     for i in range(len(operator)):
-                        operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j]) for j in range(n)]
+                        operator2[i] = [
+                            (
+                                self.matrix_system.operator_basis[j],
+                                old_to_new_variables[new_ops_dict[operator[i]], j],
+                            )
+                            for j in range(n)
+                        ]
 
                     # build the constraint single-trace operator
                     data = {}
                     for indices in list(product(range(n), repeat=len(operator))):
-                        op = tuple([value[indices[idx]][0] for idx, value in enumerate(operator2.values())])
-                        coeff = np.prod([value[indices[idx]][1] for idx, value in enumerate(operator2.values())])
+                        op = tuple(
+                            [
+                                value[indices[idx]][0]
+                                for idx, value in enumerate(operator2.values())
+                            ]
+                        )
+                        coeff = np.prod(
+                            [
+                                value[indices[idx]][1]
+                                for idx, value in enumerate(operator2.values())
+                            ]
+                        )
                         if np.abs(coeff) > tol:
                             data[op] = data.get(op, 0) + coeff
                     constraints.append(SingleTraceOperator(data=data))
@@ -439,7 +518,9 @@ class BootstrapSystemComplex:
                 )
             )
             if self.verbose:
-                debug(f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return self.clean_constraints(constraints)
 
@@ -459,7 +540,9 @@ class BootstrapSystemComplex:
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
 
             if self.verbose:
-                debug(f"Generating gauge constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating gauge constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return self.clean_constraints(constraints)
 
@@ -472,7 +555,10 @@ class BootstrapSystemComplex:
 
     def generate_cyclic_constraints(
         self,
-    ) -> tuple[int: SingleTraceOperator, dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]]:
+    ) -> tuple[
+        int:SingleTraceOperator,
+        dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]],
+    ]:
         """
         Generate cyclic constraints relating single trace operators to double
         trace operators. See S37 of
@@ -528,7 +614,9 @@ class BootstrapSystemComplex:
                     quadratic_constraints[op_idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
 
             if self.verbose:
-                debug(f"Generating cyclic constraints, operator {op_idx+1}/{len(self.operator_list)}")
+                debug(
+                    f"Generating cyclic constraints, operator {op_idx+1}/{len(self.operator_list)}"
+                )
 
         return linear_constraints, quadratic_constraints
 
@@ -581,19 +669,24 @@ class BootstrapSystemComplex:
         )
 
         # XXX
-        #linear_constraints = self.clean_constraints(linear_constraints)
+        # linear_constraints = self.clean_constraints(linear_constraints)
 
         # save the constraints
         if self.save_path is not None:
-            with open(self.save_path + "/linear_constraints_data.pkl", 'wb') as f:
+            with open(self.save_path + "/linear_constraints_data.pkl", "wb") as f:
                 pickle.dump([constraint.data for constraint in linear_constraints], f)
-            with open(self.save_path + "/cyclic_quadratic.pkl", 'wb') as f:
+            with open(self.save_path + "/cyclic_quadratic.pkl", "wb") as f:
                 cyclic_data_dict = {}
                 for key, value in cyclic_quadratic.items():
-                    cyclic_data_dict[key] = {'lhs': value['lhs'].data, 'rhs': value['rhs'].data}
+                    cyclic_data_dict[key] = {
+                        "lhs": value["lhs"].data,
+                        "rhs": value["rhs"].data,
+                    }
                 pickle.dump(cyclic_data_dict, f)
 
-        return self.clean_constraints(linear_constraints), self.clean_constraints_quadratic(cyclic_quadratic)
+        return self.clean_constraints(
+            linear_constraints
+        ), self.clean_constraints_quadratic(cyclic_quadratic)
 
     def build_linear_constraints(
         self, additional_constraints: Optional[list[SingleTraceOperator]] = None
@@ -656,15 +749,29 @@ class BootstrapSystemComplex:
         # loop over operators
         for st_operator in self.linear_constraints:
             for op_str, coeff in st_operator:
-                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.real(coeff)
-                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim_complex)] = -np.imag(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = (
+                    np.real(coeff)
+                )
+                index_value_dict[
+                    (
+                        constraint_idx,
+                        self.operator_dict[op_str] + self.param_dim_complex,
+                    )
+                ] = -np.imag(coeff)
             constraint_idx += 1
 
         # imaginary part (Y_ij vR_j + X_ij vI_j)
         for st_operator in self.linear_constraints:
             for op_str, coeff in st_operator:
-                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = np.imag(coeff)
-                index_value_dict[(constraint_idx, self.operator_dict[op_str] + self.param_dim_complex)] = np.real(coeff)
+                index_value_dict[(constraint_idx, self.operator_dict[op_str])] = (
+                    np.imag(coeff)
+                )
+                index_value_dict[
+                    (
+                        constraint_idx,
+                        self.operator_dict[op_str] + self.param_dim_complex,
+                    )
+                ] = np.real(coeff)
             constraint_idx += 1
 
         # impose the reality constraints <tr(O^{dagger})> = <tr(O)>* (real part)
@@ -691,7 +798,9 @@ class BootstrapSystemComplex:
 
                 # imaginary part
                 index_value_dict[(constraint_idx, op_idx + self.param_dim_complex)] = 1
-                index_value_dict[(constraint_idx, op_reversed_idx + self.param_dim_complex)] = 1
+                index_value_dict[
+                    (constraint_idx, op_reversed_idx + self.param_dim_complex)
+                ] = 1
                 constraint_idx += 1
 
         # assemble the constraint matrix
@@ -740,8 +849,8 @@ class BootstrapSystemComplex:
 
         # add <1> = <1>^2
         normalization_constraint = {
-            'lhs': SingleTraceOperator(data={(): 1}),
-            'rhs': DoubleTraceOperator(data={((), ()): 1}),
+            "lhs": SingleTraceOperator(data={(): 1}),
+            "rhs": DoubleTraceOperator(data={((), ()): 1}),
         }
         quadratic_constraints[None] = normalization_constraint
 
@@ -749,12 +858,14 @@ class BootstrapSystemComplex:
         for constraint_idx, constraint in enumerate(quadratic_constraints.values()):
 
             if self.verbose:
-                debug(f"Generating quadratic constraints, operator {constraint_idx+1}/{len(quadratic_constraints)}")
+                debug(
+                    f"Generating quadratic constraints, operator {constraint_idx+1}/{len(quadratic_constraints)}"
+                )
 
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
 
-            #print(f"constraint: lhs = {lhs}, rhs = {rhs}")
+            # print(f"constraint: lhs = {lhs}, rhs = {rhs}")
 
             # retrieve the vectorized form of the linear and quadratic terms
             # Note: these will be complex-valued and in the complex operator basis
@@ -764,8 +875,12 @@ class BootstrapSystemComplex:
             # convert to real operator basis, and split each constraint into a real and imaginary part
             # sum_k z_k v_k = sum_k (x_k vR_k - y_k vI_k) + i sum_k (y_k vR_k + x_k vI_k)
             # so that the real vector is [real(z), - imag(z)] and the imaginary term is [imag(z), real(z)]
-            linear_constraint_vectorR = np.concatenate((linear_constraint_vector.real, -linear_constraint_vector.imag))
-            linear_constraint_vectorI = np.concatenate((linear_constraint_vector.imag, linear_constraint_vector.real))
+            linear_constraint_vectorR = np.concatenate(
+                (linear_constraint_vector.real, -linear_constraint_vector.imag)
+            )
+            linear_constraint_vectorI = np.concatenate(
+                (linear_constraint_vector.imag, linear_constraint_vector.real)
+            )
 
             # rewrite the quadratic constraints in terms of real variables
             # this entails two things:
@@ -775,20 +890,16 @@ class BootstrapSystemComplex:
             qR = quadratic_matrix.real
             qI = quadratic_matrix.imag
 
-            QR = bmat([[qR, -qI], [-qI, -qR]], format='coo')
-            QI = bmat([[qI, qR], [qR, -qI]], format='coo')
+            QR = bmat([[qR, -qI], [-qI, -qR]], format="coo")
+            QI = bmat([[qI, qR], [qR, -qI]], format="coo")
 
             # transform to null basis
             # the minus sign is very important: (-RHS + LHS = 0)
             linear_constraint_vectorR = linear_constraint_vectorR @ null_space_matrix
             linear_constraint_vectorI = linear_constraint_vectorI @ null_space_matrix
 
-            QR = (
-                -null_space_matrix.T @ QR @ null_space_matrix
-            )
-            QI = (
-                -null_space_matrix.T @ QI @ null_space_matrix
-            )
+            QR = -null_space_matrix.T @ QR @ null_space_matrix
+            QI = -null_space_matrix.T @ QI @ null_space_matrix
 
             # reshape the (d, d) matrices to (1, d^2) matrices
             QR = QR.reshape((1, self.param_dim_null**2))
@@ -846,7 +957,7 @@ class BootstrapSystemComplex:
         )
 
         print(f"NOTE: not applying row reduction...")
-        '''
+        """
         for some reason this is taking forever...
         stacked_matrix = hstack([quadratic_terms, linear_terms])
         stacked_matrix = get_row_space_sparse(stacked_matrix)
@@ -854,7 +965,7 @@ class BootstrapSystemComplex:
         linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
         quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
-        '''
+        """
 
         return {
             "linear": linear_terms,
@@ -891,7 +1002,8 @@ class BootstrapSystemComplex:
         return cleaned_constraints
 
     def clean_constraints_quadratic(
-        self, constraints: dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]
+        self,
+        constraints: dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]],
     ) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
         """
         Remove constraints that involve operators outside the operator list.
@@ -913,16 +1025,21 @@ class BootstrapSystemComplex:
         set_of_all_operators = set(self.operator_list)
 
         for constraint_idx, quadratic_constraint in constraints.items():
-            lhs = quadratic_constraint['lhs']
-            rhs = quadratic_constraint['rhs']
+            lhs = quadratic_constraint["lhs"]
+            rhs = quadratic_constraint["rhs"]
 
             lhs_in_basis = all([op in set_of_all_operators for op in lhs.data])
-            rhs_in_basis = all([op1 in set_of_all_operators and op2 in set_of_all_operators for (op1, op2) in rhs.data])
+            rhs_in_basis = all(
+                [
+                    op1 in set_of_all_operators and op2 in set_of_all_operators
+                    for (op1, op2) in rhs.data
+                ]
+            )
 
             if lhs_in_basis and rhs_in_basis:
                 cleaned_constraints[constraint_idx] = {
-                    'lhs': lhs,
-                    'rhs': rhs,
+                    "lhs": lhs,
+                    "rhs": rhs,
                 }
 
         return cleaned_constraints
@@ -996,7 +1113,9 @@ class BootstrapSystemComplex:
             for idx2, op_str2 in enumerate(self.bootstrap_basis_list):
 
                 # tally up number of anti-hermitian operators, and add (-1) factor if odd
-                num_antihermitian_ops = sum([not self.matrix_system.hermitian_dict[term] for term in op_str1])
+                num_antihermitian_ops = sum(
+                    [not self.matrix_system.hermitian_dict[term] for term in op_str1]
+                )
                 sign = (-1) ** num_antihermitian_ops
 
                 # grab the index of the operator O_1^dag O_2
@@ -1005,10 +1124,10 @@ class BootstrapSystemComplex:
                 for k in range(null_space_matrix.shape[1]):
                     x = sign * null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
-                        #print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
+                        # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
 
-        #return bootstrap_dict
+        # return bootstrap_dict
 
         # map to a sparse array
         bootstrap_array = np.zeros(
@@ -1031,9 +1150,7 @@ class BootstrapSystemComplex:
         dim = self.bootstrap_matrix_dim
         bootstrap_array_sparse = self.build_bootstrap_table()
 
-        bootstrap_matrix = np.reshape(
-            bootstrap_array_sparse.dot(param), (dim, dim)
-        )
+        bootstrap_matrix = np.reshape(bootstrap_array_sparse.dot(param), (dim, dim))
 
         # verify that matrix is symmetric
         # the general condition is that the matrix is Hermitian, but we have made it real
@@ -1043,22 +1160,22 @@ class BootstrapSystemComplex:
             (bootstrap_matrix - bootstrap_matrix.T), np.zeros_like(bootstrap_matrix)
         ):
             violation = np.max((bootstrap_matrix - bootstrap_matrix.T))
-            raise ValueError(f"Bootstrap matrix is not symmetric, violation = {violation}")
+            raise ValueError(
+                f"Bootstrap matrix is not symmetric, violation = {violation}"
+            )
 
         return bootstrap_matrix
 
     def get_operator_expectation_value(
-            self,
-            st_operator: SingleTraceOperator,
-            param: np.ndarray
-            ) -> float:
-        param_real = (self.null_space_matrix @ param)[:self.param_dim_complex]
-        param_imag = (self.null_space_matrix @ param)[self.param_dim_complex:]
+        self, st_operator: SingleTraceOperator, param: np.ndarray
+    ) -> float:
+        param_real = (self.null_space_matrix @ param)[: self.param_dim_complex]
+        param_imag = (self.null_space_matrix @ param)[self.param_dim_complex :]
         param_complex = param_real + 1j * param_imag
 
         vec = self.single_trace_to_coefficient_vector(
-                    st_operator=st_operator, return_null_basis=False
-                )
+            st_operator=st_operator, return_null_basis=False
+        )
 
         op_expectation_value = vec @ param_complex
         return op_expectation_value

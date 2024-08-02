@@ -45,11 +45,11 @@ colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 def run_one_matrix(g, L, init=None, verbose=False):
 
     matrix_system = MatrixSystem(
-        operator_basis=['X', 'P'],
+        operator_basis=["X", "P"],
         commutation_rules_concise={
-            ('P', 'X'): -1j,
+            ("P", "X"): -1j,
         },
-        hermitian_dict={'P': True, 'X': True},
+        hermitian_dict={"P": True, "X": True},
     )
 
     # scale variables as P = sqrt(N) P', X = sqrt(N) X'
@@ -58,7 +58,7 @@ def run_one_matrix(g, L, init=None, verbose=False):
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
-    gauge = MatrixOperator(data={('X', 'P'): 1j, ('P', 'X'): -1j, ():1})
+    gauge = MatrixOperator(data={("X", "P"): 1j, ("P", "X"): -1j, (): 1})
 
     bootstrap = BootstrapSystemComplex(
         matrix_system=matrix_system,
@@ -71,7 +71,7 @@ def run_one_matrix(g, L, init=None, verbose=False):
 
     bootstrap.build_null_space_matrix()
 
-    #disable_debug()
+    # disable_debug()
 
     param, success = minimize_newton(
         bootstrap=bootstrap,
@@ -82,7 +82,7 @@ def run_one_matrix(g, L, init=None, verbose=False):
         maxiters=25,
     )
 
-    '''
+    """
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -93,15 +93,16 @@ def run_one_matrix(g, L, init=None, verbose=False):
         reg=5e-4,
         eps=5e-4,
     )
-    '''
+    """
 
     energy = bootstrap.get_operator_expectation_value(
-        st_operator=hamiltonian,
-        param=param
-        )
+        st_operator=hamiltonian, param=param
+    )
     energy = np.real(energy)
     exact_energy = compute_Brezin_energy_Han_conventions(g)
-    print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
+    print(
+        f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}"
+    )
     print(f"energy error = {energy - exact_energy:.4e}")
 
     return success, energy, param
@@ -139,7 +140,7 @@ def run_scan(L):
                 results["energy"][i],
                 color="k",
                 zorder=10,
-                #label=f"Bootstrap L={L}, converged",
+                # label=f"Bootstrap L={L}, converged",
             )
 
     ax.legend(frameon=False)

@@ -57,25 +57,27 @@ def run_two_matrix(g, L, m=1, init=None):
             ("Pi2", "Pi2"): -1,
             ("X1", "X1"): m**2,
             ("X2", "X2"): m**2,
-            ("X1", "X2", "X1", "X2"): -g*2,
-            ("X2", "X1", "X2", "X1"): -g*2,
-            ("X1", "X2", "X2", "X1"): g*2,
-            ("X2", "X1", "X1", "X2"): g*2,
-            }
+            ("X1", "X2", "X1", "X2"): -g * 2,
+            ("X2", "X1", "X2", "X1"): -g * 2,
+            ("X1", "X2", "X2", "X1"): g * 2,
+            ("X2", "X1", "X1", "X2"): g * 2,
+        }
     )
 
     # <tr G O > = 0 might need to be applied only for O with deg <= L-2
-    gauge = MatrixOperator(data={
-        ("X1", "Pi1"): 1,
-        ("Pi1", "X1"): -1,
-        ("X2", "Pi2"): 1,
-        ("Pi2", "X2"): -1,
-        (): 2
-        })
+    gauge = MatrixOperator(
+        data={
+            ("X1", "Pi1"): 1,
+            ("Pi1", "X1"): -1,
+            ("X2", "Pi2"): 1,
+            ("Pi2", "X2"): -1,
+            (): 2,
+        }
+    )
 
     symmetry_generators = [
-        SingleTraceOperator(data={('X1', 'Pi2'): 1, ('X2', 'Pi1'): -1})
-        ]
+        SingleTraceOperator(data={("X1", "Pi2"): 1, ("X2", "Pi1"): -1})
+    ]
 
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,
@@ -99,7 +101,7 @@ def run_two_matrix(g, L, m=1, init=None):
         maxiters=50,
     )
 
-    '''
+    """
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -110,7 +112,7 @@ def run_two_matrix(g, L, m=1, init=None):
         reg=5e-4,
         eps=5e-4,
     )
-    '''
+    """
 
     """
     for op in bootstrap.operator_list:
@@ -125,8 +127,10 @@ def run_two_matrix(g, L, m=1, init=None):
         st_operator=hamiltonian, return_null_basis=True
     )
     energy = vec @ param
-    #exact_energy = compute_Brezin_energy_Han_conventions(g)
-    print(f"problem success: {success}, min energy found: {energy:.6f}") #, exact (L=inf) value = {exact_energy:.6f}")
+    # exact_energy = compute_Brezin_energy_Han_conventions(g)
+    print(
+        f"problem success: {success}, min energy found: {energy:.6f}"
+    )  # , exact (L=inf) value = {exact_energy:.6f}")
     return success, energy, param
 
 

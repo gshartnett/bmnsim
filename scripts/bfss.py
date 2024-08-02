@@ -1,26 +1,26 @@
-import fire
-from typing import Optional
-import numpy as np
-import os
-import json
-from datetime import timezone
 import datetime
+import json
+import os
+from datetime import timezone
+from typing import Optional
+
+import fire
+import numpy as np
+
 from bmn.algebra import (
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
 )
 from bmn.bootstrap import BootstrapSystem
-from bmn.brezin import (
-    compute_Brezin_energy,
-)
+from bmn.brezin import compute_Brezin_energy
 from bmn.debug_utils import disable_debug
 from bmn.newton_solver import minimize as minimize_newton
 
 
 def run_bootstrap(
-    energy: float, L: int, verbose:bool=False
-    ) -> tuple[bool, float, np.ndarray]:
+    energy: float, L: int, verbose: bool = False
+) -> tuple[bool, float, np.ndarray]:
     """
     Perform the bootstrap optimization for a single instance of the model.
 
@@ -53,7 +53,7 @@ def run_bootstrap(
             "X1": True,
             "Pi2": False,
             "X2": True,
-            },
+        },
     )
 
     # lambda = 1 here
@@ -81,15 +81,17 @@ def run_bootstrap(
     )
 
     # <tr G O > = 0
-    gauge = MatrixOperator(data={
-        ("X0", "Pi0"): 1,
-        ("Pi0", "X0"): -1,
-        ("X1", "Pi1"): 1,
-        ("Pi1", "X1"): -1,
-        ("X2", "Pi2"): 1,
-        ("Pi2", "X2"): -1,
-        (): 3,
-        })
+    gauge = MatrixOperator(
+        data={
+            ("X0", "Pi0"): 1,
+            ("Pi0", "X0"): -1,
+            ("X1", "Pi1"): 1,
+            ("Pi1", "X1"): -1,
+            ("X2", "Pi2"): 1,
+            ("Pi2", "X2"): -1,
+            (): 3,
+        }
+    )
 
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,
@@ -119,15 +121,28 @@ def run_bootstrap(
     )
 
     x_squared = bootstrap.get_operator_expectation_value(
-        st_operator=SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}), param=param
+        st_operator=SingleTraceOperator(
+            data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}
+        ),
+        param=param,
     )
 
     p_squared = bootstrap.get_operator_expectation_value(
-        st_operator=SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}), param=param
+        st_operator=SingleTraceOperator(
+            data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}
+        ),
+        param=param,
     )
 
     x_4 = bootstrap.get_operator_expectation_value(
-        st_operator=SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}), param=param
+        st_operator=SingleTraceOperator(
+            data={
+                ("X0", "X0", "X0", "X0"): 1,
+                ("X1", "X1", "X1", "X1"): 1,
+                ("X2", "X2", "X2", "X2"): 1,
+            }
+        ),
+        param=param,
     )
 
     expectation_values = {
@@ -151,7 +166,9 @@ def scan_bootstrap(L, verbose=False):
     g6_max = 16
 
     g2_values = [-1, 1]
-    g4_values = np.concatenate((np.linspace(-g4_max, 0, n_grid), np.linspace(0, g4_max, n_grid)[1:]))
+    g4_values = np.concatenate(
+        (np.linspace(-g4_max, 0, n_grid), np.linspace(0, g4_max, n_grid)[1:])
+    )
     g6_values = np.linspace(0, g6_max, n_grid)
 
     for g2 in g2_values:
@@ -162,18 +179,20 @@ def scan_bootstrap(L, verbose=False):
                 if (g6 > 0) or (g4 > 0):
 
                     # get the current UTC timestamp
-                    timestamp = datetime.datetime.now(timezone.utc).replace(tzinfo=timezone.utc).timestamp()
+                    timestamp = (
+                        datetime.datetime.now(timezone.utc)
+                        .replace(tzinfo=timezone.utc)
+                        .timestamp()
+                    )
                     timestamp = int(1e6 * timestamp)
 
-                    print(f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n")
+                    print(
+                        f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n"
+                    )
 
                     success, expectation_values, param = run_bootstrap(
-                        g2=g2,
-                        g4=g4,
-                        g6=g6,
-                        L=L,
-                        verbose=verbose
-                        )
+                        g2=g2, g4=g4, g6=g6, L=L, verbose=verbose
+                    )
 
                     # record results
                     result = {
@@ -186,8 +205,9 @@ def scan_bootstrap(L, verbose=False):
                     result = result | expectation_values
 
                     # print(f"Completed run for g={g}, success={success}, energy={energy}")
-                    with open(f"{path}/{timestamp}.json", 'w') as f:
+                    with open(f"{path}/{timestamp}.json", "w") as f:
                         json.dump(result, f)
+
 
 if __name__ == "__main__":
 
