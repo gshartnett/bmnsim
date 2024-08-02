@@ -1,6 +1,13 @@
+import os
+import pickle
+import sys
+from datetime import (
+    datetime,
+    timezone,
+)
+
 import fire
 import numpy as np
-import sys, os
 
 from bmn.algebra import (
     MatrixOperator,
@@ -9,16 +16,17 @@ from bmn.algebra import (
 )
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.debug_utils import disable_debug
+from bmn.newton_solver import minimize as minimize_newton
 from bmn.solver import minimize
-import pickle
-from datetime import datetime, timezone
+
 
 def run(
         mass,
         gauge_coupling,
         L,
         fraction_operators_to_retain=1.0,
-        save_path=None
+        save_path=None,
+        init=None,
         ):
 
     if save_path is None:
@@ -86,6 +94,15 @@ def run(
         (SingleTraceOperator(data={(): 1}), 1),
         ]
 
+    param, success = minimize_newton(
+        bootstrap=bootstrap,
+        op=bootstrap.hamiltonian,
+        init=init,
+        init_scale=1e2,
+        maxiters=50,
+    )
+
+    '''
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -96,6 +113,7 @@ def run(
         reg=5e-4,
         eps=5e-4,
     )
+    '''
 
     np.save(bootstrap.save_path + "/param.npy", param)
 

@@ -1,19 +1,27 @@
-import numpy as np
 import fire
+import matplotlib
+
+# plot settings
+import matplotlib.pyplot as plt
+import numpy as np
+from cycler import cycler
+
 from bmn.algebra import (
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
 )
 from bmn.bootstrap import BootstrapSystem
+from bmn.brezin import (
+    compute_Brezin_energy,
+    compute_Brezin_energy_Han_conventions,
+)
 from bmn.debug_utils import disable_debug
-from bmn.solver import minimize, minimal_eigval
-from bmn.brezin import compute_Brezin_energy, compute_Brezin_energy_Han_conventions
-
-# plot settings
-import matplotlib.pyplot as plt
-import matplotlib
-from cycler import cycler
+from bmn.newton_solver import minimize as minimize_newton
+from bmn.solver import (
+    minimal_eigval,
+    minimize,
+)
 
 plt.rcParams["xtick.direction"] = "in"
 plt.rcParams["ytick.direction"] = "in"
@@ -34,7 +42,7 @@ matplotlib.rcParams.update(
 colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
 
 
-def run_one_matrix(g, L, init=None):
+def run_one_matrix(g, L, init=None, verbose=False):
 
     matrix_system = MatrixSystem(
         # operator_basis=['X', 'P'],
@@ -70,16 +78,27 @@ def run_one_matrix(g, L, init=None):
 
     disable_debug()
 
-    param, success = minimize(
+    param, success = minimize_newton(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
         init=init,
         init_scale=1e2,
-        verbose=False,
-        maxiters=25,
-        reg=5e-4,
-        eps=5e-4,
+        verbose=verbose,
+        maxiters=50,
     )
+
+    '''
+    param, success = minimize(
+        bootstrap=bootstrap,
+        op=bootstrap.hamiltonian,
+        init=init,
+        init_scale=1e1,
+        verbose=verbose,
+        maxiters=100,
+        reg=5e-3,
+        eps=9e-4,
+    )
+    '''
 
     """
     for op in bootstrap.operator_list:
@@ -96,7 +115,7 @@ def run_one_matrix(g, L, init=None):
         )
     exact_energy = compute_Brezin_energy_Han_conventions(g)
     print(f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}")
-
+    print(f"energy error = {energy - exact_energy:.4e}")
     return success, energy, param
 
 
@@ -141,9 +160,9 @@ def run_scan(L):
     plt.show()
 
 
-def run(L=3, g=1.0, scan=False):
+def run(L=3, g=1.0, scan=False, verbose=False):
     if not scan:
-        success, energy, param = run_one_matrix(g=g, L=L)
+        success, energy, param = run_one_matrix(g=g, L=L, verbose=verbose)
         print(f"param = {param}")
         return
     else:

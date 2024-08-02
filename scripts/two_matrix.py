@@ -1,19 +1,24 @@
-import numpy as np
 import fire
+import matplotlib
+
+# plot settings
+import matplotlib.pyplot as plt
+import numpy as np
+from cycler import cycler
+
 from bmn.algebra import (
     MatrixOperator,
     MatrixSystem,
     SingleTraceOperator,
 )
 from bmn.bootstrap import BootstrapSystem
+from bmn.brezin import (
+    compute_Brezin_energy,
+    compute_Brezin_energy_Han_conventions,
+)
 from bmn.debug_utils import disable_debug
+from bmn.newton_solver import minimize as minimize_newton
 from bmn.solver import minimize
-from bmn.brezin import compute_Brezin_energy, compute_Brezin_energy_Han_conventions
-
-# plot settings
-import matplotlib.pyplot as plt
-import matplotlib
-from cycler import cycler
 
 plt.rcParams["xtick.direction"] = "in"
 plt.rcParams["ytick.direction"] = "in"
@@ -76,7 +81,7 @@ def run_two_matrix(g, L, m=1, init=None):
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
         gauge=gauge,
-        half_max_degree=L,
+        max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
         symmetry_generators=symmetry_generators,
@@ -86,6 +91,15 @@ def run_two_matrix(g, L, m=1, init=None):
 
     disable_debug()
 
+    param, success = minimize_newton(
+        bootstrap=bootstrap,
+        op=bootstrap.hamiltonian,
+        init=init,
+        init_scale=1e2,
+        maxiters=50,
+    )
+
+    '''
     param, success = minimize(
         bootstrap=bootstrap,
         op=bootstrap.hamiltonian,
@@ -96,6 +110,7 @@ def run_two_matrix(g, L, m=1, init=None):
         reg=5e-4,
         eps=5e-4,
     )
+    '''
 
     """
     for op in bootstrap.operator_list:

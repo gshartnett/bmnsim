@@ -1,6 +1,13 @@
+import os
+import pickle
+import sys
+from datetime import (
+    datetime,
+    timezone,
+)
+
 import fire
 import numpy as np
-import sys, os
 
 from bmn.algebra import (
     MatrixOperator,
@@ -10,8 +17,7 @@ from bmn.algebra import (
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.debug_utils import disable_debug
 from bmn.solver import minimize
-import pickle
-from datetime import datetime, timezone
+
 
 def run(nu, L, radius_squared=None, save_path=None):
 
@@ -48,17 +54,17 @@ def run(nu, L, radius_squared=None, save_path=None):
             ("X2", "X2"): nu**2 / 2,
             # cubic term
             ("X0", "X1", "X2"): 6 * 1j * nu,
-            # quadratic term (XY)
+            # quartic term (XY)
             ("X0", "X1", "X0", "X1"): -1 / 4,
             ("X1", "X0", "X1", "X0"): -1 / 4,
             ("X0", "X1", "X1", "X0"): 1 / 4,
             ("X1", "X0", "X0", "X1"): 1 / 4,
-            # quadratic term (XZ) TODO check sign
+            # quartic term (XZ) TODO check sign
             ("X0", "X2", "X0", "X2"): -1 / 4,
             ("X2", "X0", "X2", "X0"): -1 / 4,
             ("X0", "X2", "X2", "X0"): 1 / 4,
             ("X2", "X0", "X0", "X2"): 1 / 4,
-            # quadratic term (YZ)
+            # quartic term (YZ)
             ("X1", "X2", "X1", "X2"): -1 / 4,
             ("X2", "X1", "X2", "X1"): -1 / 4,
             ("X1", "X2", "X2", "X1"): 1 / 4,
