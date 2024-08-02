@@ -98,6 +98,7 @@ def run_bootstrap(
         max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
+        verbose=True,
     )
 
     bootstrap.get_null_space_matrix()

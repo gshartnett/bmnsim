@@ -25,6 +25,7 @@ from bmn.linear_algebra import (
     get_row_space_sparse,
     get_real_coefficients_from_dict,
 )
+from bmn.debug_utils import debug
 
 
 class BootstrapSystem:
@@ -42,6 +43,7 @@ class BootstrapSystem:
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
+        verbose: bool=False,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -62,6 +64,7 @@ class BootstrapSystem:
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
         print(f"NOTE Remember to incorporate more general basis changes!")
+        self.verbose = verbose
         self._validate()
 
     def _validate(self):
@@ -112,6 +115,10 @@ class BootstrapSystem:
         Note that K_{ia} K_{ib} = delta_{ab}.
         """
         linear_constraint_matrix = self.build_linear_constraints(additional_constraints)
+
+        if self.verbose:
+            debug(f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}")
+
         null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
         self.null_space_matrix = null_space_matrix
         self.param_dim_null = self.null_space_matrix.shape[1]
@@ -342,7 +349,7 @@ class BootstrapSystem:
         """
         constraints = []
 
-        for op in self.operator_list:
+        for op_idx, op in enumerate(self.operator_list):
             constraints.append(
                 self.matrix_system.single_trace_commutator(
                     st_operator1=self.hamiltonian,
@@ -355,6 +362,9 @@ class BootstrapSystem:
                     st_operator2=self.hamiltonian,
                 )
             )
+
+            if self.verbose:
+                debug(f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}")
 
         return self.clean_constraints(constraints)
 
@@ -370,8 +380,12 @@ class BootstrapSystem:
             The list of constraint terms.
         """
         constraints = []
-        for op in self.operator_list:
+        for op_idx, op in enumerate(self.operator_list):
             constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
+
+            if self.verbose:
+                debug(f"Generating gauge constraints, operator {op_idx+1}/{len(self.operator_list)}")
+
         return self.clean_constraints(constraints)
 
     def generate_odd_degree_vanish_constraints(self) -> list[SingleTraceOperator]:
@@ -419,7 +433,7 @@ class BootstrapSystem:
         identity = SingleTraceOperator(data={(): 1})
         quadratic_constraints = {}
         linear_constraints = {}
-        for idx, op in enumerate(self.operator_list):
+        for op_idx, op in enumerate(self.operator_list):
             if len(op) > 1:
 
                 if not isinstance(op, tuple):
@@ -448,17 +462,20 @@ class BootstrapSystem:
 
                 # if the quadratic term vanishes but the linear term is non-zero, record the constraint as being linear
                 if not eq_lhs.is_zero() and eq_rhs.is_zero():
-                    linear_constraints[idx] = eq_lhs
+                    linear_constraints[op_idx] = eq_lhs
 
                 # do not expect to find any constraints where the linear term vanishes but the quadratic term does not
                 elif eq_lhs.is_zero() and not eq_rhs.is_zero():
                     raise ValueError(
-                        f"Warning, for operator index {idx}, op={op}, the LHS is unexpectedly 0"
+                        f"Warning, for operator index {op_idx}, op={op}, the LHS is unexpectedly 0"
                     )
 
                 # record proper quadratic constraints
                 elif not eq_lhs.is_zero():
-                    quadratic_constraints[idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
+                    quadratic_constraints[op_idx] = {"lhs": eq_lhs, "rhs": eq_rhs}
+
+            if self.verbose:
+                debug(f"Generating cyclic constraints, operator {op_idx+1}/{len(self.operator_list)}")
 
         return linear_constraints, quadratic_constraints
 

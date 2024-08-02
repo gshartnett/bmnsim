@@ -16,6 +16,7 @@ from bmn.brezin import (
 )
 from bmn.debug_utils import disable_debug
 from bmn.newton_solver import minimize as minimize_newton
+from bmn.solver import minimize as minimize_old
 
 
 def run_bootstrap(
@@ -70,6 +71,7 @@ def run_bootstrap(
         max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
+        verbose=False,
     )
 
     bootstrap.get_null_space_matrix()

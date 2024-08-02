@@ -318,7 +318,7 @@ def get_quadratic_constraint_vector_sparse(
     quad_terms = vstack([csr_matrix(quad_term @ param + quad_term.T @ param) for quad_term in quad_terms])
     constraint_grad = quadratic_constraints["linear"] + quad_terms
 
-    return constraint_vector, constraint_grad
+    return constraint_vector, constraint_grad.todense()
 
 
 def minimize(
