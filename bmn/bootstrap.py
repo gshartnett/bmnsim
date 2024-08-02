@@ -4,13 +4,15 @@ from typing import (
     Optional,
     Union,
 )
-
+import os, json
 import numpy as np
 from scipy.sparse import (
     coo_matrix,
     csr_matrix,
     hstack,
     vstack,
+    save_npz,
+    load_npz,
 )
 
 from bmn.algebra import (
@@ -44,6 +46,7 @@ class BootstrapSystem:
         odd_degree_vanish=True,
         simplify_quadratic=True,
         verbose: bool=False,
+        save_path: Optional[str]=None,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -63,8 +66,13 @@ class BootstrapSystem:
         self.quadratic_constraints = None
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
+        self.save_path = save_path
+        if self.save_path is not None:
+            if not os.path.exists(self.save_path):
+                os.makedirs(self.save_path)
         print(f"NOTE Remember to incorporate more general basis changes!")
         self.verbose = verbose
+
         self._validate()
 
     def _validate(self):
@@ -119,25 +127,12 @@ class BootstrapSystem:
         if self.verbose:
             debug(f"Building the null space matrix. The linear constraint matrix has dimensions {linear_constraint_matrix.shape}")
 
-        null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
-        self.null_space_matrix = null_space_matrix
+        self.null_space_matrix = get_null_space_sparse(linear_constraint_matrix)
         self.param_dim_null = self.null_space_matrix.shape[1]
         print(f"Null space dimension (number of parameters) = {self.param_dim_null}")
-        return
 
-    def get_null_space_matrix(self) -> np.ndarray:
-        """
-        Retrieves the null space matrix, K_{ia}, building it if necessary.
-
-        Returns
-        -------
-        np.ndarray
-            The null space matrix K_{ia}.
-        """
-        if self.null_space_matrix is not None:
-            return self.null_space_matrix
-        self.build_null_space_matrix()
-        return self.null_space_matrix
+        if self.save_path is not None:
+            save_npz(self.save_path + "/null_space_matrix.npz", self.null_space_matrix)
 
     def generate_operators(self, max_degree: int) -> list[str]:
         """
@@ -218,7 +213,7 @@ class BootstrapSystem:
             vec[idx] = coeff
         if not return_null_basis:
             return np.asarray(vec)
-        return np.asarray(vec) @ self.get_null_space_matrix()
+        return np.asarray(vec) @ self.null_space_matrix
 
     def double_trace_to_coefficient_matrix(self, dt_operator: DoubleTraceOperator):
         # use large-N factorization <tr(O1)tr(O2)> = <tr(O1)><tr(O2)>
@@ -605,7 +600,9 @@ class BootstrapSystem:
         quadratic_constraints = self.quadratic_constraints
 
         additional_constraints = []
-        null_space_matrix = self.get_null_space_matrix()
+        if self.null_space_matrix is None:
+            self.build_null_space_matrix()
+        null_space_matrix = self.null_space_matrix
 
         linear_terms = []
         quadratic_terms = []
@@ -771,7 +768,9 @@ class BootstrapSystem:
             The bootstrap array, with shape (self.bootstrap_matrix_dim**2, self.param_dim_null).
             It has been reshaped to be a matrix.
         """
-        null_space_matrix = self.get_null_space_matrix()
+        if self.null_space_matrix is None:
+            raise ValueError("Error, null space matrix has not yet been built.")
+        null_space_matrix = self.null_space_matrix
 
         bootstrap_dict = {}
         for idx1, op_str1 in enumerate(self.bootstrap_basis_list):

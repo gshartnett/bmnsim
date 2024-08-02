@@ -74,7 +74,7 @@ def run_bootstrap(
         verbose=False,
     )
 
-    bootstrap.get_null_space_matrix()
+    #bootstrap.get_null_space_matrix()
 
     disable_debug()
 
