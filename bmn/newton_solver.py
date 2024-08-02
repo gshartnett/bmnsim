@@ -36,6 +36,7 @@ from bmn.linear_algebra import (
     create_sparse_matrix_from_dict,
     get_null_space_sparse,
 )
+#from bmn.solver import get_quadratic_constraint_vector_dense as get_quadratic_constraint_vector
 from bmn.solver import get_quadratic_constraint_vector_sparse as get_quadratic_constraint_vector
 
 
