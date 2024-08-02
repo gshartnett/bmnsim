@@ -4,7 +4,7 @@ from typing import (
     Optional,
     Union,
 )
-import os, json
+import os, json, pickle
 import numpy as np
 from scipy.sparse import (
     coo_matrix,
@@ -183,6 +183,25 @@ class BootstrapSystem:
         self.bootstrap_matrix_dim = len(bootstrap_basis_list)
 
         return operator_list
+
+    def load_constraints(self):
+        if self.save_path is None:
+            raise ValueError("Error, no save path provided.")
+        if not os.path.exists(self.save_path):
+            raise ValueError(f"Error, save path {self.save_path} does not exist.")
+
+        # load the linear constraints
+        with open(self.save_path + "/linear_constraints_data.pkl", 'rb') as f:
+            loaded_data = pickle.load(f)
+        self.linear_constraints = [SingleTraceOperator(data=data) for data in loaded_data]
+
+        # load the cyclic quadratic constraints
+        with open(self.save_path + "/cyclic_quadratic.pkl", 'rb') as f:
+            loaded_data = pickle.load(f)
+        self.quadratic_constraints = {key: {'lhs': SingleTraceOperator(data=value['lhs']), 'rhs': DoubleTraceOperator(data=value['rhs'])} for key, value in loaded_data.items()}
+
+        self.null_space_matrix = load_npz(self.save_path + "/null_space_matrix.npz")
+        self.param_dim_null = self.null_space_matrix.shape[1]
 
     def single_trace_to_coefficient_vector(
         self, st_operator: SingleTraceOperator, return_null_basis: bool = False
@@ -526,6 +545,16 @@ class BootstrapSystem:
         linear_constraints.extend(
             [self.matrix_system.hermitian_conjugate(op) for op in linear_constraints]
         )
+
+        # save the constraints
+        if self.save_path is not None:
+            with open(self.save_path + "/linear_constraints_data.pkl", 'wb') as f:
+                pickle.dump([constraint.data for constraint in linear_constraints], f)
+            with open(self.save_path + "/cyclic_quadratic.pkl", 'wb') as f:
+                cyclic_data_dict = {}
+                for key, value in cyclic_quadratic.items():
+                    cyclic_data_dict[key] = {'lhs': value['lhs'].data, 'rhs': value['rhs'].data}
+                pickle.dump(cyclic_data_dict, f)
 
         return linear_constraints, cyclic_quadratic
 

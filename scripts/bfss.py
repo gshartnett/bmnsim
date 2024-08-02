@@ -99,9 +99,10 @@ def run_bootstrap(
         odd_degree_vanish=True,
         simplify_quadratic=True,
         verbose=True,
+        save_path=f"data/bfss_L_{L}",
     )
 
-    bootstrap.get_null_space_matrix()
+    bootstrap.build_null_space_matrix()
 
     disable_debug()
 

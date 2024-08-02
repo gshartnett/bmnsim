@@ -72,6 +72,7 @@ def run_bootstrap(
         odd_degree_vanish=True,
         simplify_quadratic=True,
         verbose=False,
+        save_path=f"data/one_matrix_degree_6_L_{L}",
     )
 
     #bootstrap.get_null_space_matrix()
