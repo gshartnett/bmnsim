@@ -14,13 +14,12 @@ from bmn.algebra import (
 )
 from bmn.bootstrap import BootstrapSystem
 from bmn.brezin import compute_Brezin_energy
-from bmn.debug_utils import disable_debug
-from bmn.newton_solver import minimize as minimize_newton
+from bmn.newton_solver import solve_bootstrap
 
 
 def run_bootstrap(
     energy: float, L: int, verbose: bool = False
-) -> tuple[bool, float, np.ndarray]:
+) -> tuple[float, np.ndarray]:
     """
     Perform the bootstrap optimization for a single instance of the model.
 
@@ -104,16 +103,18 @@ def run_bootstrap(
         save_path=f"data/bfss_L_{L}",
     )
 
-    bootstrap.build_null_space_matrix()
+    bootstrap.load_constraints(f"data/bfss_L_{L}")
 
-    disable_debug()
-
-    param, success = minimize_newton(
+    param = solve_bootstrap(
         bootstrap=bootstrap,
-        op=bootstrap.hamiltonian,
-        init_scale=1e2,
-        verbose=verbose,
-        maxiters=10,
+        st_operator_to_minimize=SingleTraceOperator(
+            data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}
+        ),
+        init_scale=1e1,
+        maxiters=30,
+        tol=1e-8,
+        reg=1e7,
+        eps=1e-5,
     )
 
     energy = bootstrap.get_operator_expectation_value(
@@ -152,7 +153,7 @@ def run_bootstrap(
         "x_4": x_4,
     }
 
-    return success, expectation_values, param
+    return expectation_values, param
 
 
 def scan_bootstrap(L, verbose=False):
@@ -190,7 +191,7 @@ def scan_bootstrap(L, verbose=False):
                         f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n"
                     )
 
-                    success, expectation_values, param = run_bootstrap(
+                    expectation_values, param = run_bootstrap(
                         g2=g2, g4=g4, g6=g6, L=L, verbose=verbose
                     )
 
@@ -199,7 +200,6 @@ def scan_bootstrap(L, verbose=False):
                         "g2": g2,
                         "g4": g4,
                         "g6": g6,
-                        "success": success,
                         "param": list(param),
                     }
                     result = result | expectation_values

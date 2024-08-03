@@ -15,8 +15,7 @@ from bmn.algebra import (
 from bmn.bootstrap import BootstrapSystem
 from bmn.brezin import compute_Brezin_energy
 from bmn.debug_utils import disable_debug
-from bmn.newton_solver import minimize as minimize_newton
-from bmn.solver import minimize as minimize_old
+from bmn.newton_solver import solve_bootstrap
 
 
 def run_bootstrap(
@@ -75,16 +74,14 @@ def run_bootstrap(
         save_path=f"data/one_matrix_degree_6_L_{L}",
     )
 
-    bootstrap.build_null_space_matrix()
-
-    disable_debug()
-
-    param, success = minimize_newton(
+    param = solve_bootstrap(
         bootstrap=bootstrap,
-        op=bootstrap.hamiltonian,
-        init_scale=1e2,
-        verbose=verbose,
-        maxiters=10,
+        st_operator_to_minimize=bootstrap.hamiltonian,
+        init_scale=1e1,
+        maxiters=30,
+        tol=1e-8,
+        reg=1e7,
+        eps=1e-5,
     )
 
     energy = bootstrap.get_operator_expectation_value(
@@ -118,11 +115,11 @@ def run_bootstrap(
         g_Brezin = g4 / (4 * g2 ** (3 / 2))
         exact_energy = compute_Brezin_energy(g_Brezin) * g2 ** (1 / 2)
         print(
-            f"problem success: {success}, min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}"
+            f"min energy found: {energy:.6f}, exact (L=inf) value = {exact_energy:.6f}"
         )
         print(f"energy error = {energy - exact_energy:.4e}")
 
-    return success, expectation_values, param
+    return expectation_values, param
 
 
 def scan_bootstrap(L, verbose=False):
@@ -160,7 +157,7 @@ def scan_bootstrap(L, verbose=False):
                         f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n"
                     )
 
-                    success, expectation_values, param = run_bootstrap(
+                    expectation_values, param = run_bootstrap(
                         g2=g2, g4=g4, g6=g6, L=L, verbose=verbose
                     )
 
@@ -169,7 +166,7 @@ def scan_bootstrap(L, verbose=False):
                         "g2": g2,
                         "g4": g4,
                         "g6": g6,
-                        "success": success,
+                        #"success": success,
                         "param": list(param),
                     }
                     result = result | expectation_values

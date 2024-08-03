@@ -1,97 +1,94 @@
-from itertools import (
-    chain,
-    product,
-)
-from numbers import Number
-from typing import (
-    Self,
-    Union,
-)
-
 import cvxpy as cp
 import numpy as np
-import scipy
 import scipy.sparse as sparse
-import sympy as sp
-from scipy.linalg import qr
-from scipy.sparse import (
-    coo_matrix,
-    csc_matrix,
-    csr_matrix,
-)
-from scipy.sparse.linalg import (
-    splu,
-    svds,
-)
-from sksparse.cholmod import cholesky
-
-from bmn.algebra import (
-    MatrixOperator,
-    MatrixSystem,
-    SingleTraceOperator,
-)
-from bmn.bootstrap import BootstrapSystem
+from scipy.sparse import csr_matrix
+from typing import Optional
+from bmn.algebra import SingleTraceOperator
 from bmn.debug_utils import debug
-from bmn.linear_algebra import (
-    create_sparse_matrix_from_dict,
-    get_null_space_sparse,
-)
-
-# from bmn.solver import get_quadratic_constraint_vector_dense as get_quadratic_constraint_vector
 from bmn.solver import (
     get_quadratic_constraint_vector_sparse as get_quadratic_constraint_vector,
 )
+from bmn.bootstrap import BootstrapSystem
 
 
 def sdp_minimize(
-    vec,
-    bootstrap_array_sparse,
-    A1,
-    b1,
-    A2,
-    b2,
-    init,
-    radius=np.inf,
-    maxiters=10_000,
-    eps=1e-4,
-    reg=1e-4,
-    verbose=True,
-):
+    linear_objective_vector: np.ndarray,
+    bootstrap_table_sparse: csr_matrix,
+    linear_inhomogeneous_eq: tuple[csr_matrix, np.ndarray],
+    linear_inhomogeneous_penalty: tuple[csr_matrix, np.ndarray],
+    init: np.ndarray,
+    radius: float = np.inf,
+    maxiters: int = 10_000,
+    eps: float = 1e-4,
+    reg: float = 1e6,
+    verbose: bool = False,
+) -> tuple[bool, str, np.ndarray]:
     """
-    Finds the parameters such that
-            1. All bootstrap tables are positive semidefinite;
-            2. ||param - init||_2 <= radius;
-            3. A.dot(param) = b;
-            4. vec.dot(param) + reg * np.linalg.norm(param) is minimized.
-    Arguments:
-            vec (numpy array of shape (num_variables,))
-            tables (list of tuples (int, sparse matrix)): the first integer gives the size of the bootstrap matrix and the sparse matrix then
-                    has shape (size * size, num_variables), dot the matrix with the parameters and reshape into a list of real symmetric square
-                    matrices. The constraint is that these matrices must be positive semidefinite.
-            A (sparse matrix of shape (num_constraints, num_variables)), b (numpy array of shape (num_constraints,)):
-                    linear constraints that A.dot(param) = b
-            init (numpy array of shape (num_variables,)): the initial parameters
-            radius (float): radius of the trust region
-            reg (float): regularization parameter
-            maxiters (int), eps (float), verbose (bool): options for the convex solver
-    Returns:
-            param (numpy array of shape (num_variables,)): the optimal parameters found
+    Performs the following SDP minimization over the vector variable x:
+
+    A linear objective v^T x is minimized, subject to the constraints
+        - The bootstrap matrix M(x) is positive semi-definite
+        - The linear inhomogeneous equation A x = b is satisfied
+        - A second linear inhomgeneous equation A' x = b' is imposed as a penalty
+        in the objective function
+        - The variable x is constrained to lie within a radius-R ball of an initial
+        variable `init`
+
+    Parameters
+    ----------
+    linear_objective_vector : np.ndarray
+        A vector determining the objective function v^T x
+    bootstrap_table_sparse : csr_matrix
+        The bootstrap table (represented as a sparse CSR matrix)
+    linear_inhomogeneous_eq : tuple[csr_matrix, np.ndarray]
+        A tuple (A, b) of a matrix A and a vector b, which together
+        define a linear inhomogeneous equation of the form A x = b.
+        This equation will be imposed directly as a constraint.
+    linear_inhomogeneous_penalty : tuple[csr_matrix, np.ndarra]
+        A tuple (A, b) of a matrix A and a vector b, which together
+        define a linear inhomogeneous equation of the form A x = b.
+        This equation will be imposed indirectly as a penalty term
+        added to the objective function.
+    init : np.ndarray
+        An initial value for the variable vector x.
+    radius : float, optional
+        The maximum allowable change in the initial vector, by default np.inf
+    maxiters : int, optional
+        The maximum number of iterations for the SDP optimization, by default 10_000
+    eps : float, optional
+        A tolerance variable for the SDP optimization, by default 1e-4
+    reg : float, optional
+        A regularization coefficient controlling the relative weight of the
+        penalty term, by default 1e-4
+    verbose : bool, optional
+        An optional boolean flag used to set the verbosity, by default True
+
+    Returns
+    -------
+    tuple[bool, str, np.ndarray]
+        A tuple containing
+            a boolean variable, where True corresponds to a successful execution of the optimization
+            a str containing the optimization status
+            a numpy array with the final, optimized vector
     """
     # initialize the cvxpy parameter vector in the null space
     num_variables = init.size
     param = cp.Variable(num_variables)
 
     # build the constraints
-    # 1. ||param - init||_2 <= radius
-    # 2. the PSD bootstrap constraint(s)
-    # 3. A @ param == 0
-    size = int(np.sqrt(bootstrap_array_sparse.shape[0]))
-    constraints = [cp.reshape(bootstrap_array_sparse @ param, (size, size)) >> 0]
-    constraints += [A1 @ param == b1]
+    # 1. the PSD bootstrap constraint(s)
+    # 2. A @ param == 0
+    # 3. ||param - init||_2 <= radius
+    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
+    constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
+    constraints += [linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]]
     constraints += [cp.norm(param - init) <= radius]
 
     # the loss to minimize
-    loss = vec @ param + reg * cp.norm(A2 @ param - b2)
+    penalty = cp.norm(
+        linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
+    )
+    loss = linear_objective_vector @ param + reg * penalty
 
     # solve the above described optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
@@ -102,54 +99,93 @@ def sdp_minimize(
     return param.value, prob.status, prob.value
 
 
-def minimize(
-    bootstrap,
-    op,
-    init=None,
-    init_scale=1.0,
-    op_cons=[(SingleTraceOperator(data={(): 1}), 1)],
-    maxiters=25,
-    verbose=True,
-    savefile="",
-):
+def solve_bootstrap(
+    bootstrap: BootstrapSystem,
+    st_operator_to_minimize: SingleTraceOperator,
+    st_operator_inhomo_constraints=[
+        (SingleTraceOperator(data={(): 1}), 1)
+        ],
+    init:Optional[np.ndarray]=None,
+    maxiters:int=25,
+    tol:float=1e-8,
+    init_scale:float=1.0,
+    eps: float = 1e-4,
+    reg: float = 1e6,
+    ) -> np.ndarray:
+    """
+    Solve the bootstrap by minimizing the objective function subject to
+    the bootstrap constraints.
 
-    # get the quantities needed for numerics
-    _ = bootstrap.build_linear_constraints().tocsr()
-    quadratic_constraints = bootstrap.build_quadratic_constraints()
-    print(f"Building bootstrap table")
-    bootstrap_array_sparse = bootstrap.build_bootstrap_table()
+    TODO: add more info on the Newton's method used here.
 
-    quadratic_constraints["linear"] = quadratic_constraints["linear"]
-    quadratic_constraints["quadratic"] = quadratic_constraints["quadratic"]
+    Parameters
+    ----------
+    bootstrap : BootstrapSystem
+        The bootstrap system to be solved
+    st_operator_to_minimize : SingleTraceOperator
+        The single-trace operator whose expectation value we wish to minimize
+    st_operator_inhomo_constraints : list, optional
+        The single-trace expectation value constraints, <tr(O)>=c,
+        by default [ (SingleTraceOperator(data={(): 1}), 1) ]
+    init : Optional[np.ndarray], optional
+        The initial parameter vector, by default None
+    maxiters : int, optional
+        The maximum number of iterations for the optimization, by default 25
+    tol : float, optional
+        The tolerance for the quadratic constraint violations, by default 1e-8
+    init_scale : float, optional
+        An overall scale for the parameter vector, by default 1.0
+    eps : float, optional
+        The epsilon used in the cvxpy inner optimization problem, by default 1e-4
+    reg : float, optional
+        The regularization parameter for the penalty terms, by default 1e-4
 
+    Returns
+    -------
+    np.ndarray
+        _description_
+
+    Raises
+    ------
+    ValueError
+        _description_
+    """
+
+    # get the bootstrap constraints necessary for the optimization
+    # linear constraints
+    if bootstrap.linear_constraints is None:
+        _ = bootstrap.build_linear_constraints().tocsr()
+
+    # quadratic constraints
+    if bootstrap.quadratic_constraints_numerical is None:
+        bootstrap.build_quadratic_constraints()
+    quadratic_constraints_numerical = bootstrap.quadratic_constraints_numerical
+
+    # bootstrap table
+    if bootstrap.bootstrap_table_sparse is None:
+        bootstrap.build_bootstrap_table()
+    bootstrap_table_sparse = bootstrap.bootstrap_table_sparse
+
+    # initialize the variable vector
     if init is None:
-        # initial parameter vector
         print(f"Initializing randomly")
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
-
-        # print(f"Initializing from all 1's")
-        # init = np.ones(shape=bootstrap.param_dim_null)
-
-        # print(f"Initializing from all 0's")
-        # init = np.zeros(shape=bootstrap.param_dim_null)
-
-    # print(f"Rescale to normalize")
-    # init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
-
     param = init
 
-    # vector corresponding to op to minimize (typically the Hamiltonian)
-    vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
-    vec = vec.real  # TODO check this!
+    # map the single trace operator whose expectation value we wish to minimize to a coefficient vector
+    linear_objective_vector = bootstrap.single_trace_to_coefficient_vector(
+        st_operator_to_minimize,
+        return_null_basis=True
+        )
+    if not np.allclose(linear_objective_vector.imag, np.zeros_like(linear_objective_vector)):
+        raise ValueError("Error, the coefficient vector is complex but should be real.")
+    linear_objective_vector = linear_objective_vector.real
 
-    # the loss function to minimize, i.e., the value of op
-    # vec = operator_to_vector(sol, op)
-    # loss = lambda param: vec.dot(param)
-
-    # extra constraints in op_cons, i.e., <o> = v for o, v in op_cons
+    # build the A, b matrix and vector for the linear inhomogeneous constraints
+    # this will always include the constraint that tr(1) = 1, and possibly other constraints as well
     A = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b = np.zeros(0)
-    for op, value in op_cons:
+    for op, value in st_operator_inhomo_constraints:
         A = sparse.vstack(
             [
                 A,
@@ -161,55 +197,44 @@ def minimize(
             ]
         )
         b = np.append(b, value)
+    linear_inhomogeneous_eq = (A, b)
 
     # iterate over steps
     for step in range(maxiters):
-        print(f"step = {step+1}/{maxiters}")
         debug(f"step = {step+1}/{maxiters}")
 
-        # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
-        val, grad = get_quadratic_constraint_vector(
-            quadratic_constraints, param, compute_grad=True
+        # build the Newton method update for the quadratic constraints, which
+        # produces a second inhomogenous linear equation A' x = b'
+        # here, the new equation is grad * (new_param - param) + val = 0
+        # this equation will be imposed as a penalty
+        quad_cons_val, quad_cons_grad = get_quadratic_constraint_vector(
+            quadratic_constraints_numerical, param, compute_grad=True
         )
-
-        # for i in range(len(val)):
-        #    print(f"val[i] = {val[i]}")
-        #    print(f"grad val[i] = {np.max(np.abs(grad[i]))}")
-
-        # if step == 0:
-        #    quadratic_constraint_scale_vector = 1/100 * np.abs(np.random.normal(size=10))
-        #    print(quadratic_constraint_scale_vector)
-        # val = val / quadratic_constraint_scale_vector
-        # grad = grad / quadratic_constraint_scale_vector[:, None]
-        # print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
-
-        # scale = 1e0
-        # if step > 1115:
-        #    A = sparse.vstack([A, grad])
-        #    b = np.append(b, (grad.dot(param) - val))
-
-        A2 = grad
-        b2 = np.asarray(grad.dot(param) - val)[0]
+        linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
 
         param, _, _ = sdp_minimize(
-            vec=vec,
-            bootstrap_array_sparse=bootstrap_array_sparse,
-            A1=A,
-            b1=b,
-            A2=A2,
-            b2=b2,
+            linear_objective_vector=linear_objective_vector,
+            bootstrap_table_sparse=bootstrap_table_sparse,
+            linear_inhomogeneous_eq=linear_inhomogeneous_eq,
+            linear_inhomogeneous_penalty=linear_inhomogeneous_penalty,
             init=param,
-            verbose=verbose,
+            #verbose=verbose, # don't need to print out cvxpy info
             radius=1e8,
-            reg=1e6,
+            reg=reg,
+            eps=eps,
         )
 
-        if param is None:
-            assert 1 == 0
-
-        # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
-        val, grad = get_quadratic_constraint_vector(
-            quadratic_constraints, param, compute_grad=True
+        # print out some diagnostic information
+        quad_cons_val = get_quadratic_constraint_vector(
+            quadratic_constraints_numerical, param, compute_grad=False
+        )
+        max_quad_constraint_violation = np.max(np.abs(quad_cons_val))
+        debug(
+            f"objective: {linear_objective_vector @ param:.4f}, max violation of quad constraint: {max_quad_constraint_violation:.4e}"
         )
 
-    return param, True
+        # terminate early if the tolerance is satisfied
+        if max_quad_constraint_violation < tol and param is not None:
+            return param
+
+    return param
