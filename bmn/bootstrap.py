@@ -304,6 +304,7 @@ class BootstrapSystem:
             return []
 
         constraints = []
+        counter = 0
         n = len(self.matrix_system.operator_basis)
 
         # loop over symmetry generators M
@@ -348,7 +349,8 @@ class BootstrapSystem:
             ]  # flatten
 
             # loop over all operators in the eigenbasis
-            for operator in all_new_operators:
+            for idx, operator in enumerate(all_new_operators):
+                counter += 1
 
                 # compute the charge under the symmetry
                 charge = sum(
@@ -411,6 +413,11 @@ class BootstrapSystem:
                         constraints.append(constraint_op.get_real_part())
                         constraints.append(constraint_op.get_imag_part())
                 """
+                if self.verbose:
+                    debug(
+                        f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}"
+                    )
+
 
         # check for SO(2) case - move to a unit test at some point
         # also note sign is wrong for eigenvalue...

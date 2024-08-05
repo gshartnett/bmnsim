@@ -3,7 +3,8 @@ import json
 import os
 from datetime import timezone
 from typing import Optional
-
+from concurrent.futures import ProcessPoolExecutor
+import tqdm
 import fire
 import numpy as np
 
@@ -18,8 +19,13 @@ from bmn.newton_solver import solve_bootstrap
 
 
 def run_bootstrap(
-    energy: float, L: int, verbose: bool = False
-) -> tuple[float, np.ndarray]:
+    energy: float,
+    L: int,
+    st_operator_to_bound: SingleTraceOperator=SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
+    bound_direction: str = 'lower',
+    verbose: bool = True,
+    path_suffix: Optional[str] = None,
+    ) -> tuple[float, np.ndarray]:
     """
     Perform the bootstrap optimization for a single instance of the model.
 
@@ -38,6 +44,15 @@ def run_bootstrap(
         _description_
     """
 
+    # get the current UTC timestamp
+    timestamp = (
+        datetime.datetime.now(timezone.utc)
+        .replace(tzinfo=timezone.utc)
+        .timestamp()
+    )
+    timestamp = int(1e6 * timestamp)
+
+    # set-up the matrix algebra system
     matrix_system = MatrixSystem(
         operator_basis=["X0", "X1", "X2", "Pi0", "Pi1", "Pi2"],
         commutation_rules_concise={
@@ -55,7 +70,7 @@ def run_bootstrap(
         },
     )
 
-    # lambda = 1 here
+    # build the Hamiltonian (lambda = 1 here)
     hamiltonian = SingleTraceOperator(
         data={
             ("Pi0", "Pi0"): -0.5,
@@ -79,7 +94,7 @@ def run_bootstrap(
         }
     )
 
-    # <tr G O > = 0
+    # build the gauge operator
     gauge = MatrixOperator(
         data={
             ("X0", "Pi0"): 1,
@@ -92,6 +107,13 @@ def run_bootstrap(
         }
     )
 
+    symmetry_generators = [
+        SingleTraceOperator(data={("X1", "Pi2"): 1, ("X2", "Pi1"): -1}), # (1, 2)
+        SingleTraceOperator(data={("X0", "Pi2"): 1, ("X2", "Pi0"): -1}), # (0, 2)
+        SingleTraceOperator(data={("X0", "Pi1"): 1, ("X1", "Pi0"): -1}), # (0, 1)
+    ]
+
+    # build the bootstrap
     bootstrap = BootstrapSystem(
         matrix_system=matrix_system,
         hamiltonian=hamiltonian,
@@ -99,25 +121,33 @@ def run_bootstrap(
         max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        verbose=True,
+        symmetry_generators=symmetry_generators,
+        verbose=verbose,
         save_path=f"data/bfss_L_{L}",
     )
-
+    # load previously-computed constraints
     bootstrap.load_constraints(f"data/bfss_L_{L}")
 
-    param = solve_bootstrap(
+    # adjust the operator if we wish to obtain an upper bound
+    if bound_direction == 'lower':
+        sign = 1
+    else:
+        sign = -1
+
+    # solve
+    param, optimization_result = solve_bootstrap(
         bootstrap=bootstrap,
-        st_operator_to_minimize=SingleTraceOperator(
-            data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}
-        ),
-        init_scale=1e1,
-        maxiters=30,
-        tol=1e-8,
-        reg=1e7,
-        eps=1e-5,
+        st_operator_to_minimize=sign * st_operator_to_bound,
+        init_scale=1e2,
+        maxiters=10,
+        maxiters_cvxpy=10_00,
+        tol=1e-7,
+        reg=1e6,
+        eps=1e-4,
     )
 
-    energy = bootstrap.get_operator_expectation_value(
+    # record various expectation values
+    hamiltonian_ev = bootstrap.get_operator_expectation_value(
         st_operator=hamiltonian, param=param
     )
 
@@ -146,67 +176,65 @@ def run_bootstrap(
         param=param,
     )
 
-    expectation_values = {
+    result = {
         "energy": energy,
+        "st_operator_to_bound": st_operator_to_bound.__str__(),
+        "bound_direction": bound_direction,
+        "hamiltonian_ev": hamiltonian_ev,
         "x_squared": x_squared,
         "p_squared": p_squared,
         "x_4": x_4,
     }
+    result = result | optimization_result
 
-    return expectation_values, param
+    # set-up save path
+    path = f"data/bfss_L_{L}"
+    if path_suffix is not None:
+        path += "_" + path_suffix
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    with open(f"{path}/{timestamp}.json", "w") as f:
+        json.dump(result, f)
+
+    return result
 
 
-def scan_bootstrap(L, verbose=False):
+def scan_bootstrap(L:int, parallel:bool=False):
 
     path = f"data/bfss_L_{L}"
     if not os.path.exists(path):
         os.makedirs(path)
 
     n_grid = 20
-    g4_max = 16
-    g6_max = 16
 
-    g2_values = [-1, 1]
-    g4_values = np.concatenate(
-        (np.linspace(-g4_max, 0, n_grid), np.linspace(0, g4_max, n_grid)[1:])
-    )
-    g6_values = np.linspace(0, g6_max, n_grid)
+    energies = np.exp(np.linspace(np.log(0.1), np.log(100), n_grid))
+    bound_directions = ['lower', 'upper']
+    operators_to_bound = {
+        "x2": SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
+        "p2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}),
+        "x4": SingleTraceOperator(data={
+                ("X0", "X0", "X0", "X0"): 1,
+                ("X1", "X1", "X1", "X1"): 1,
+                ("X2", "X2", "X2", "X2"): 1,
+            }),
+            }
 
-    for g2 in g2_values:
-        for g4 in g4_values:
-            for g6 in g6_values:
+    run_configs = []
+    for bound_direction in bound_directions:
+        for st_op in operators_to_bound:
+            for energy in energies:
+                run_configs.append({'bound_direction': bound_direction, 'st_op': st_op, 'energy': energy})
 
-                # only run models with bounded-by-below potentials
-                if (g6 > 0) or (g4 > 0):
-
-                    # get the current UTC timestamp
-                    timestamp = (
-                        datetime.datetime.now(timezone.utc)
-                        .replace(tzinfo=timezone.utc)
-                        .timestamp()
-                    )
-                    timestamp = int(1e6 * timestamp)
-
-                    print(
-                        f"\n\n solving problem with g2 = {g2}, g4 = {g4}, g6 = {g6} \n\n"
-                    )
-
-                    expectation_values, param = run_bootstrap(
-                        g2=g2, g4=g4, g6=g6, L=L, verbose=verbose
-                    )
-
-                    # record results
-                    result = {
-                        "g2": g2,
-                        "g4": g4,
-                        "g6": g6,
-                        "param": list(param),
-                    }
-                    result = result | expectation_values
-
-                    # print(f"Completed run for g={g}, success={success}, energy={energy}")
-                    with open(f"{path}/{timestamp}.json", "w") as f:
-                        json.dump(result, f)
+    if not parallel:
+        for run_config in run_configs:
+            run_scan_for_single_grid_point(config_filepath=config_filepath, i=i, j=j)
+    else:
+        with ProcessPoolExecutor() as executor:
+            futures = [executor.submit(run_scan_for_single_grid_point, config_filepath, i, j) for run_config in run_configs]
+        for future in futures:
+            future.result()
+        print('finished!')
 
 
 if __name__ == "__main__":

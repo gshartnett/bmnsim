@@ -19,7 +19,7 @@ from bmn.newton_solver import solve_bootstrap
 
 
 def run_bootstrap(
-    g2: float, g4: float, g6: float, L: int, verbose: bool = False
+    g2: float, g4: float, g6: float, L: int, verbose: bool = True
 ) -> tuple[bool, float, np.ndarray]:
     """
     Perform the bootstrap optimization for a single instance of the model.
@@ -70,18 +70,20 @@ def run_bootstrap(
         max_degree_L=L,
         odd_degree_vanish=True,
         simplify_quadratic=True,
-        verbose=True,
+        verbose=verbose,
         save_path=f"data/one_matrix_degree_6_L_{L}",
     )
 
-    param = solve_bootstrap(
+    param, optimization_result = solve_bootstrap(
         bootstrap=bootstrap,
         st_operator_to_minimize=bootstrap.hamiltonian,
-        init_scale=1e1,
-        maxiters=30,
-        tol=1e-8,
-        reg=1e7,
-        eps=1e-5,
+        init_scale=1e2,
+        maxiters=100,
+        maxiters_cvxpy=10_000,
+        tol=1e-4,
+        reg=1e6,
+        eps=1e-4,
+        radius=1e5,
     )
 
     energy = bootstrap.get_operator_expectation_value(
@@ -100,13 +102,15 @@ def run_bootstrap(
         st_operator=SingleTraceOperator(data={("Pi", "Pi", "Pi", "Pi"): 1}), param=param
     )
 
-    expectation_values = {
+    result = {
         "energy": energy,
         "x^2": x_2,
         "x^4": x_4,
         "p^2": p_2,
         "p^4": p_4,
     }
+
+    result = result | optimization_result
 
     # compare against Brezin et al (if applicable)
     # the factor of 4 is due to the difference in convention
@@ -119,7 +123,7 @@ def run_bootstrap(
         )
         print(f"energy error = {energy - exact_energy:.4e}")
 
-    return expectation_values, param
+    return result
 
 
 def scan_bootstrap(L, verbose=False):
