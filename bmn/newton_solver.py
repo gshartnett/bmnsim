@@ -101,7 +101,7 @@ def sdp_minimize(
     constraints += [linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]]
     constraints += [cp.norm(param - init) <= radius]
 
-    # the loss to minimize
+    # the 1ss to minimize
     if linear_inhomogeneous_penalty is None:
         loss = linear_objective_vector @ param
     else:
@@ -114,12 +114,15 @@ def sdp_minimize(
     prob = cp.Problem(cp.Minimize(loss), constraints)
     prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
 
+    if param.value is None:
+        return None, None
+
     # log information on the extent to which the constraints are satisfied
     ball_constraint = np.linalg.norm(param.value- init)
     violation_of_linear_constraints = np.linalg.norm(linear_inhomogeneous_eq[0] @ param.value - linear_inhomogeneous_eq[1])
     min_bootstrap_eigenvalue = np.linalg.eigvalsh((bootstrap_table_sparse @ param.value).reshape(size, size))[0]
-    debug(f"sdp_minimize status after maxiters {maxiters}: {prob.status}")
-    debug(f"sdp_minimize ||x-init||: {ball_constraint:.4e}")
+    debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
+    debug(f"sdp_minimize ||x - init||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints}")
     debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue}")
 
@@ -127,7 +130,7 @@ def sdp_minimize(
         "prob.status": prob.status,
         "prob.value": prob.value,
         "maxiters_cvxpy": maxiters,
-        "ball_constraint": ball_constraint,
+        "||x-init||": ball_constraint,
         "violation_of_linear_constraints": violation_of_linear_constraints,
         "min_bootstrap_eigenvalue": min_bootstrap_eigenvalue,
     }
@@ -189,6 +192,8 @@ def solve_bootstrap(
     ValueError
         _description_
     """
+    #np.random.seed(123)
+    #debug(f"setting PRNG seed!")
 
     #reg_min = 1e4
     #reg_max = 1e7
@@ -209,9 +214,10 @@ def solve_bootstrap(
         bootstrap.build_bootstrap_table()
     bootstrap_table_sparse = bootstrap.bootstrap_table_sparse
 
+    debug(f"Final bootstrap parameter dimension: {bootstrap.param_dim_null}")
     # initialize the variable vector
     if init is None:
-        print(f"Initializing randomly")
+        debug(f"Initializing randomly")
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
     param = init
 
@@ -229,6 +235,7 @@ def solve_bootstrap(
     A = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b = np.zeros(0)
     for op, value in st_operator_inhomo_constraints:
+
         A = sparse.vstack(
             [
                 A,
@@ -250,10 +257,12 @@ def solve_bootstrap(
             )
 
     # iterate over steps
-    for step in range(maxiters):
+    #for step in range(maxiters):
+    step = 0
+    while step < maxiters:
 
-        #reg = 0 * reg_schedule[step]
-        debug(f"step = {step+1}/{maxiters}, reg={reg:.4e}")
+        debug(f"step = {step+1}/{maxiters}")
+        #print(f"param[0] = {param[0]}")
 
         # build the Newton method update for the quadratic constraints, which
         # produces a second inhomogenous linear equation A' x = b'
@@ -283,6 +292,8 @@ def solve_bootstrap(
                 np.append(linear_inhomogeneous_eq_no_quadratic[1], np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
                 )
 
+        #debug(f"radius={radius:.4e}, maxiters_cvxpy={maxiters_cvxpy}, reg={reg:.4e}, eps={eps:.4e}, init_scale={init_scale:.4e}")
+
         # perform the inner convex minimization
         param, optimization_result = sdp_minimize(
             linear_objective_vector=linear_objective_vector,
@@ -297,6 +308,14 @@ def solve_bootstrap(
             eps=eps,
         )
 
+        if param is None:
+            param = init
+            reg *= 0.75
+            step = 0
+            debug(f"param is None, resetting step=0 and reducing reg to reg={reg:.4e}")
+            continue
+        step += 1
+
         # print out some diagnostic information
         quad_cons_val = get_quadratic_constraint_vector(
             quadratic_constraints_numerical, param, compute_grad=False
@@ -310,7 +329,7 @@ def solve_bootstrap(
         )
 
         # terminate early if the tolerance is satisfied
-        if reg * quad_constraint_violation_norm < tol and param is not None:
+        if reg * quad_constraint_violation_norm < tol:
             return param, optimization_result
 
     return param, optimization_result

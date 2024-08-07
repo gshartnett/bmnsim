@@ -42,7 +42,7 @@ class BootstrapSystem:
         self,
         matrix_system: MatrixSystem,
         hamiltonian: SingleTraceOperator,
-        gauge: MatrixOperator,
+        gauge_generator: MatrixOperator,
         max_degree_L: int,
         symmetry_generators: list[SingleTraceOperator] = None,
         tol: float = 1e-10,
@@ -53,7 +53,7 @@ class BootstrapSystem:
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
-        self.gauge = gauge
+        self.gauge_generator = gauge_generator
         self.max_degree_L = max_degree_L
         self.odd_degree_vanish = odd_degree_vanish
         self.operator_list = self.generate_operators(2 * max_degree_L)
@@ -81,7 +81,7 @@ class BootstrapSystem:
         """
         Check that the operator basis used in matrix_system is consistent with gauge and hamiltonian.
         """
-        self.validate_operator(operator=self.gauge)
+        self.validate_operator(operator=self.gauge_generator)
         self.validate_operator(operator=self.hamiltonian)
         print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
         print(f"Attribute: simplify_quadratic = {self.simplify_quadratic}")
@@ -192,7 +192,7 @@ class BootstrapSystem:
         if not os.path.exists(path):
             raise ValueError(f"Error, save path {path} does not exist.")
 
-        print("Loading from previously computed data")
+        print("Attempting to load from previously computed data")
 
         # load the linear constraints
         if os.path.exists(path + "/linear_constraints_data.pkl"):
@@ -471,7 +471,7 @@ class BootstrapSystem:
         """
         constraints = []
         for op_idx, op in enumerate(self.operator_list):
-            constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
+            constraints.append((self.gauge_generator * MatrixOperator(data={op: 1})).trace())
 
             if self.verbose:
                 debug(
