@@ -7,6 +7,8 @@ L = 2
 generate_configs_bmn(
     config_filename=f"test",
     config_dir=f"MiniBMN_L_{L}_symmetric",
+    g2=1,
+    g4=1,
     load_from_previously_computed=True,
     impose_symmetries=True,
     tol=1e-1,

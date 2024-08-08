@@ -42,7 +42,7 @@ class BootstrapSystemComplex:
         self,
         matrix_system: MatrixSystem,
         hamiltonian: SingleTraceOperator,
-        gauge: MatrixOperator,
+        gauge_generator: MatrixOperator,
         max_degree_L: int,
         symmetry_generators: list[SingleTraceOperator] = None,
         tol: float = 1e-10,
@@ -54,7 +54,7 @@ class BootstrapSystemComplex:
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
-        self.gauge = gauge
+        self.gauge_generator = gauge_generator
         self.max_degree_L = max_degree_L
         self.odd_degree_vanish = odd_degree_vanish
         self.fraction_operators_to_retain = fraction_operators_to_retain
@@ -83,7 +83,7 @@ class BootstrapSystemComplex:
         """
         Check that the operator basis used in matrix_system is consistent with gauge and hamiltonian.
         """
-        self.validate_operator(operator=self.gauge)
+        self.validate_operator(operator=self.gauge_generator)
         self.validate_operator(operator=self.hamiltonian)
         print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
         print(f"Attribute: simplify_quadratic = {self.simplify_quadratic}")
@@ -537,7 +537,7 @@ class BootstrapSystemComplex:
         """
         constraints = []
         for op_idx, op in enumerate(self.operator_list):
-            constraints.append((self.gauge * MatrixOperator(data={op: 1})).trace())
+            constraints.append((self.gauge_generator * MatrixOperator(data={op: 1})).trace())
 
             if self.verbose:
                 debug(

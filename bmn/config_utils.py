@@ -6,7 +6,7 @@ from concurrent.futures import ProcessPoolExecutor
 from bmn.algebra import SingleTraceOperator
 from bmn.bootstrap import BootstrapSystem
 from bmn.bootstrap_complex import BootstrapSystemComplex
-from bmn.models import OneMatrix, TwoMatrix, MiniBFSS, ThreeMatrix
+from bmn.models import OneMatrix, TwoMatrix, MiniBFSS, ThreeMatrix, MiniBMN
 from bmn.newton_solver import solve_bootstrap
 
 # TODO
@@ -134,11 +134,6 @@ def generate_configs_two_matrix(
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
     optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
 
-    #print(f"kwargs={kwargs}")
-    #print(f"bootstrap_keys={bootstrap_keys}")
-    #print(f"kwargs_bootstrap={kwargs_bootstrap}")
-    #print(f"bootstrap_config_dict={bootstrap_config_dict}")
-
     # build the config dictionary
     config_data = {
         "model": {
@@ -226,7 +221,6 @@ def generate_configs_bfss(
 
     return
 
-'''
 def generate_configs_bmn(
     config_filename,
     config_dir,
@@ -248,47 +242,6 @@ def generate_configs_bmn(
             "model name": "MiniBMN",
             "bootstrap class": "BootstrapSystemComplex",
             "couplings": {"g2": g2, "g4": g4},
-        },
-        "bootstrap": bootstrap_config_dict,
-        "optimizer": optimization_config_dict,
-    }
-
-    # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
-    with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
-        yaml.dump(config_data, outfile, default_flow_style=False)
-
-    return
-'''
-
-def generate_configs_bfss_OLD(
-    config_filename,
-    config_dir,
-    energy,
-    st_operator_to_minimize,
-    **kwargs):
-
-    # split the kwargs into separate bootstrap and optimization kwargs
-    kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
-
-    # build the bootstrap and optimization configs
-    bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
-
-    # add BFSS-specific fields
-    bootstrap_config_dict["st_operator_to_minimize"] = st_operator_to_minimize
-    bootstrap_config_dict["st_operators_evs_to_set"] = {
-        "energy": energy,
-    }
-
-    # build the config dictionary
-    config_data = {
-        "model": {
-            "model name": "MiniBFSS",
-            "bootstrap class": "BootstrapSystem",
-            "couplings": {"lambda": 1},
         },
         "bootstrap": bootstrap_config_dict,
         "optimizer": optimization_config_dict,

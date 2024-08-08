@@ -263,7 +263,7 @@ class MiniBFSS(MatrixModel):
             ]
 
 
-class MiniBFMN(MatrixModel):
+class MiniBMN(MatrixModel):
     def __init__(self, couplings):
         super().__init__(couplings)
         self.build_symmetry_generators()
