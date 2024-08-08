@@ -226,6 +226,41 @@ def generate_configs_bfss(
 
     return
 
+'''
+def generate_configs_bmn(
+    config_filename,
+    config_dir,
+    g2,
+    g4,
+    **kwargs):
+
+    # split the kwargs into separate bootstrap and optimization kwargs
+    kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
+    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+
+    # build the bootstrap and optimization configs
+    bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
+    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+
+    # build the config dictionary
+    config_data = {
+        "model": {
+            "model name": "MiniBMN",
+            "bootstrap class": "BootstrapSystemComplex",
+            "couplings": {"g2": g2, "g4": g4},
+        },
+        "bootstrap": bootstrap_config_dict,
+        "optimizer": optimization_config_dict,
+    }
+
+    # write to yaml
+    if not os.path.exists(f"configs/{config_dir}"):
+        os.makedirs(f"configs/{config_dir}")
+    with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
+        yaml.dump(config_data, outfile, default_flow_style=False)
+
+    return
+'''
 
 def generate_configs_bfss_OLD(
     config_filename,
@@ -270,7 +305,6 @@ def generate_configs_bfss_OLD(
 
 def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
 
-
     # load the config file
     with open(f"configs/{config_dir}/{config_filename}.yaml") as stream:
         config = yaml.safe_load(stream)
@@ -290,7 +324,6 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
     if model.symmetry_generators is not None:
         save_path = save_path + "_symmetric"
     #print(save_path, os.path.exists(save_path), config_bootstrap["load_from_previously_computed"])
-    #assert 1==0
 
     # operator to minimize
     st_operator_to_minimize = model.operators_to_track[config_bootstrap["st_operator_to_minimize"]]
@@ -302,10 +335,6 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
             st_operator_inhomo_constraints.append(
                 (model.operators_to_track[key], value)
             )
-
-    #print(f"hamiltonian = {model.hamiltonian}")
-    #print(f"st_operator_to_minimize = {st_operator_to_minimize}")
-    #print(f"st_operator_inhomo_constraints = {st_operator_inhomo_constraints}")
 
     # build the bootstrap
     bootstrap = globals()[config_model["bootstrap class"]](

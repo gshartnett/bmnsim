@@ -195,6 +195,9 @@ def solve_bootstrap(
     #np.random.seed(123)
     #debug(f"setting PRNG seed!")
 
+    #print(f"tol={tol:.4e}")
+    #assert 1==0
+
     #reg_min = 1e4
     #reg_max = 1e7
     #reg_schedule = np.exp(np.linspace(np.log(reg_min), np.log(reg_max), maxiters))
@@ -327,6 +330,8 @@ def solve_bootstrap(
         debug(
             f"objective: {linear_objective_vector @ param:.4f}, max violation of quadratic constraints: {max_quad_constraint_violation:.4e}, reg * ||q_I|| = {reg * quad_constraint_violation_norm:.4e}"
         )
+
+        debug(f"tol = {tol:.4e}, reg * quad_constraint_violation_norm < tol = {reg * quad_constraint_violation_norm < tol}")
 
         # terminate early if the tolerance is satisfied
         if reg * quad_constraint_violation_norm < tol:
