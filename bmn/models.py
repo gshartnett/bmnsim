@@ -182,7 +182,25 @@ class ThreeMatrix(MatrixModel):
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
             "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}),
             "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1, ("Pi2", "Pi2", "Pi2", "Pi2"): 1}),
-        }
+            "neg_commutator_squared": SingleTraceOperator(data={
+                # quartic term (XY)
+                ("X0", "X1", "X0", "X1"): -1,
+                ("X1", "X0", "X1", "X0"): 1,
+                ("X0", "X1", "X1", "X0"): 1,
+                ("X1", "X0", "X0", "X1"): 1,
+                # quartic term (XZ)
+                ("X0", "X2", "X0", "X2"): -1,
+                ("X2", "X0", "X2", "X0"): -1,
+                ("X0", "X2", "X2", "X0"): 1,
+                ("X2", "X0", "X0", "X2"): 1,
+                # quartic term (YZ)
+                ("X1", "X2", "X1", "X2"): -1,
+                ("X2", "X1", "X2", "X1"): -1,
+                ("X1", "X2", "X2", "X1"): 1,
+                ("X2", "X1", "X1", "X2"): 1,
+                }
+            ),
+            }
 
     def build_symmetry_generators(self):
         self.symmetry_generators = [
@@ -253,7 +271,25 @@ class MiniBFSS(MatrixModel):
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
             "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}),
             "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1, ("Pi2", "Pi2", "Pi2", "Pi2"): 1}),
-        }
+            "neg_commutator_squared": SingleTraceOperator(data={
+                # quartic term (XY)
+                ("X0", "X1", "X0", "X1"): -1,
+                ("X1", "X0", "X1", "X0"): 1,
+                ("X0", "X1", "X1", "X0"): 1,
+                ("X1", "X0", "X0", "X1"): 1,
+                # quartic term (XZ)
+                ("X0", "X2", "X0", "X2"): -1,
+                ("X2", "X0", "X2", "X0"): -1,
+                ("X0", "X2", "X2", "X0"): 1,
+                ("X2", "X0", "X0", "X2"): 1,
+                # quartic term (YZ)
+                ("X1", "X2", "X1", "X2"): -1,
+                ("X2", "X1", "X2", "X1"): -1,
+                ("X1", "X2", "X2", "X1"): 1,
+                ("X2", "X1", "X1", "X2"): 1,
+                }
+            ),
+            }
 
     def build_symmetry_generators(self):
         self.symmetry_generators = [

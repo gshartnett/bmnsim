@@ -31,7 +31,9 @@ optimization_keys=[
     "maxiters",
     "maxiters_cvxpy",
     "tol",
-    "reg",
+    'reg',
+    "penalty_reg",
+    "penalty_reg_decay_rate",
     "eps",
     "radius",
     ]
@@ -41,8 +43,10 @@ def generate_optimization_configs(
     init_scale=1e2,
     maxiters=100,
     maxiters_cvxpy=10_000,
-    tol=1e-4,
-    reg=1e6,
+    tol=1e-6,
+    reg=1e-4,
+    penalty_reg=1e6,
+    penalty_reg_decay_rate=None,
     eps=1e-4,
     radius=1e5,
     ):
@@ -53,6 +57,8 @@ def generate_optimization_configs(
         "maxiters_cvxpy": maxiters_cvxpy,
         "tol": tol,
         "reg": reg,
+        'penalty_reg': penalty_reg,
+        "penalty_reg_decay_rate": penalty_reg_decay_rate,
         "eps": eps,
         "radius": radius,
         }
@@ -316,7 +322,7 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
 
     # record select expectation values
     expectation_values = {
-        name: bootstrap.get_operator_expectation_value(st_operator=st_operator, param=param)
+        name: bootstrap.get_operator_expectation_value(st_operator=st_operator, param=param).real
         for name, st_operator in model.operators_to_track.items()
         }
 

@@ -37,7 +37,8 @@ def sdp_minimize(
     radius: float = np.inf,
     maxiters: int = 2500,
     eps: float = 1e-4,
-    reg: float = 1e6,
+    reg: float = 1e-4,
+    penalty_reg: float = 1e6,
     verbose: bool = False,
 ) -> tuple[bool, str, np.ndarray]:
     """
@@ -102,13 +103,14 @@ def sdp_minimize(
     constraints += [cp.norm(param - init) <= radius]
 
     # the 1ss to minimize
-    if linear_inhomogeneous_penalty is None:
-        loss = linear_objective_vector @ param
-    else:
+    loss = linear_objective_vector @ param
+    if linear_inhomogeneous_penalty is not None:
         penalty = cp.norm(
             linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
         )
-        loss = linear_objective_vector @ param + reg * penalty
+        loss += penalty_reg * penalty
+    if reg is not None:
+        loss += reg * cp.norm(param)
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
@@ -123,8 +125,8 @@ def sdp_minimize(
     min_bootstrap_eigenvalue = np.linalg.eigvalsh((bootstrap_table_sparse @ param.value).reshape(size, size))[0]
     debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
     debug(f"sdp_minimize ||x - init||: {ball_constraint:.4e}")
-    debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints}")
-    debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue}")
+    debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
+    debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}")
 
     optimization_result = {
         "prob.status": prob.status,
@@ -150,7 +152,9 @@ def solve_bootstrap(
     tol:float=1e-5,
     init_scale:float=1.0,
     eps: float = 1e-4,
-    reg: float = 1e6,
+    reg: float = 1e-4,
+    penalty_reg: float = 1e6,
+    penalty_reg_decay_rate: Optional[float] = None,
     use_newton = True,
     radius: float = 1e8,
     ) -> np.ndarray:
@@ -264,8 +268,12 @@ def solve_bootstrap(
     step = 0
     while step < maxiters:
 
-        debug(f"step = {step+1}/{maxiters}")
-        #print(f"param[0] = {param[0]}")
+        debug(f"\n\nstep = {step+1}/{maxiters}")
+        debug(f"radius={radius:.4e}")
+        debug(f"reg={reg:.4e}")
+        debug(f"penalty_reg={penalty_reg:.4e}")
+        debug(f"eps={eps:.4e}")
+        debug(f"init_scale={init_scale:.4e}")
 
         # build the Newton method update for the quadratic constraints, which
         # produces a second inhomogenous linear equation A' x = b'
@@ -284,7 +292,6 @@ def solve_bootstrap(
             debug(f"Not using Ax=b for quadratic constraints")
             linear_inhomogeneous_eq = linear_inhomogeneous_eq_no_quadratic
             linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
-
         else:
             # TODO still working on what I want to do here
             #linear_inhomogeneous_penalty = None
@@ -294,8 +301,19 @@ def solve_bootstrap(
                 sparse.vstack([linear_inhomogeneous_eq_no_quadratic[0], quad_cons_grad]),
                 np.append(linear_inhomogeneous_eq_no_quadratic[1], np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
                 )
-
-        #debug(f"radius={radius:.4e}, maxiters_cvxpy={maxiters_cvxpy}, reg={reg:.4e}, eps={eps:.4e}, init_scale={init_scale:.4e}")
+        '''
+        if step == 0:
+            # only use Ax=b for the non-quadratic constraints
+            debug(f"Not using Ax=b for quadratic constraints")
+            linear_inhomogeneous_eq = linear_inhomogeneous_eq_no_quadratic
+            #linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
+        else:
+            debug(f"Using Ax=b for quadratic constraints")
+            linear_inhomogeneous_eq = (
+                sparse.vstack([linear_inhomogeneous_eq_no_quadratic[0], quad_cons_grad]),
+                np.append(linear_inhomogeneous_eq_no_quadratic[1], np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
+                )
+        '''
 
         # perform the inner convex minimization
         param, optimization_result = sdp_minimize(
@@ -307,15 +325,15 @@ def solve_bootstrap(
             #verbose=verbose, # don't need to print out cvxpy info
             radius=radius,
             maxiters=maxiters_cvxpy,
-            reg=reg,
+            penalty_reg=penalty_reg,
             eps=eps,
         )
 
         if param is None:
             param = init
-            reg *= 0.75
+            penalty_reg *= 0.75
             step = 0
-            debug(f"param is None, resetting step=0 and reducing reg to reg={reg:.4e}")
+            debug(f"param is None, resetting step=0 and reducing penalty_reg to penalty_reg={penalty_reg:.4e}")
             continue
         step += 1
 
@@ -327,14 +345,19 @@ def solve_bootstrap(
         quad_constraint_violation_norm = np.linalg.norm(quad_cons_val)
         optimization_result["max_quad_constraint_violation"] = max_quad_constraint_violation
         optimization_result["quad_constraint_violation_norm"] = quad_constraint_violation_norm
-        debug(
-            f"objective: {linear_objective_vector @ param:.4f}, max violation of quadratic constraints: {max_quad_constraint_violation:.4e}, reg * ||q_I|| = {reg * quad_constraint_violation_norm:.4e}"
-        )
-
-        debug(f"tol = {tol:.4e}, reg * quad_constraint_violation_norm < tol = {reg * quad_constraint_violation_norm < tol}")
+        debug(f"penalty_reg * ||q_I|| = {penalty_reg * quad_constraint_violation_norm:.4e}")
+        debug(f"norm(param) = {np.linalg.norm(param):.4e}")
+        debug(f"penalty_reg * quad_constraint_violation_norm < tol = {penalty_reg * quad_constraint_violation_norm < tol}")
+        debug(f"max violation of quadratic constraints: {max_quad_constraint_violation:.4e}")
+        debug(f"objective: {linear_objective_vector @ param:.4f}")
 
         # terminate early if the tolerance is satisfied
-        if reg * quad_constraint_violation_norm < tol:
+        #if penalty_reg * quad_constraint_violation_norm < tol:
+        if max_quad_constraint_violation < tol:
             return param, optimization_result
+
+        # decay the regularization parameter
+        if penalty_reg_decay_rate is not None:
+            penalty_reg = penalty_reg * penalty_reg_decay_rate
 
     return param, optimization_result

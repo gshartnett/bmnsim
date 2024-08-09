@@ -50,7 +50,7 @@ class BootstrapSystemComplex:
         simplify_quadratic=True,
         save_path: Optional[str] = None,
         verbose: bool = False,
-        fraction_operators_to_retain: float = 1.0,
+        fraction_operators_to_retain: float = 1,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -70,6 +70,8 @@ class BootstrapSystemComplex:
         self.null_space_matrix = None
         self.linear_constraints = None
         self.quadratic_constraints = None
+        self.quadratic_constraints_numerical = None
+        self.bootstrap_table_sparse = None
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
         if save_path is not None:
@@ -99,32 +101,52 @@ class BootstrapSystemComplex:
                         f"Invalid operator: constrains term {op_str} which is not in operator_basis."
                     )
 
-    def load_constraints(self):
-        if self.save_path is None:
-            raise ValueError("Error, no save path provided.")
-        if not os.path.exists(self.save_path):
-            raise ValueError(f"Error, save path {self.save_path} does not exist.")
+    def load_constraints(self, path):
+        if not os.path.exists(path):
+            raise ValueError(f"Error, save path {path} does not exist.")
+
+        print("Attempting to load from previously computed data")
 
         # load the linear constraints
-        with open(self.save_path + "/linear_constraints_data.pkl", "rb") as f:
-            loaded_data = pickle.load(f)
-        self.linear_constraints = [
-            SingleTraceOperator(data=data) for data in loaded_data
-        ]
+        if os.path.exists(path + "/linear_constraints_data.pkl"):
+            with open(path + "/linear_constraints_data.pkl", "rb") as f:
+                loaded_data = pickle.load(f)
+            self.linear_constraints = [
+                SingleTraceOperator(data=data) for data in loaded_data
+            ]
+            print("  loaded previously computed linear constraints")
 
         # load the cyclic quadratic constraints
-        with open(self.save_path + "/cyclic_quadratic.pkl", "rb") as f:
-            loaded_data = pickle.load(f)
-        self.quadratic_constraints = {
-            key: {
-                "lhs": SingleTraceOperator(data=value["lhs"]),
-                "rhs": DoubleTraceOperator(data=value["rhs"]),
+        if os.path.exists(path + "/cyclic_quadratic.pkl"):
+            with open(path + "/cyclic_quadratic.pkl", "rb") as f:
+                loaded_data = pickle.load(f)
+            self.quadratic_constraints = {
+                key: {
+                    "lhs": SingleTraceOperator(data=value["lhs"]),
+                    "rhs": DoubleTraceOperator(data=value["rhs"]),
+                }
+                for key, value in loaded_data.items()
             }
-            for key, value in loaded_data.items()
-        }
+            print("  loaded previously computed cyclic constraints")
 
-        self.null_space_matrix = load_npz(self.save_path + "/null_space_matrix.npz")
-        self.param_dim_null = self.null_space_matrix.shape[1]
+        # load the null space matrix
+        if os.path.exists(path + "/null_space_matrix.npz"):
+            self.null_space_matrix = load_npz(path + "/null_space_matrix.npz")
+            self.param_dim_null = self.null_space_matrix.shape[1]
+            print("  loaded previously computed null space matrix")
+
+        # load the quadratic (numerical) constraints
+        if os.path.exists(path + "/quadratic_constraints_numerical_linear_term.npz") and os.path.exists(path + "/quadratic_constraints_numerical_quadratic_term.npz"):
+            quadratic_constraints_numerical = {}
+            quadratic_constraints_numerical["linear"] = load_npz(path + "/quadratic_constraints_numerical_linear_term.npz")
+            quadratic_constraints_numerical["quadratic"] = load_npz(path + "/quadratic_constraints_numerical_quadratic_term.npz")
+            self.quadratic_constraints_numerical = quadratic_constraints_numerical
+            print("  loaded previously computed quadratic constraints (numerical)")
+
+        # load the bootstrap table
+        if os.path.exists(path + "/bootstrap_table_sparse.npz"):
+            self.bootstrap_table_sparse = load_npz(path + "/bootstrap_table_sparse.npz")
+            print("  loaded previously computed bootstrap table")
 
     def scale_param_to_enforce_normalization(self, param: np.ndarray) -> np.ndarray:
         """
@@ -955,22 +977,23 @@ class BootstrapSystemComplex:
         print(
             f"Number of quadratic constraints before row reduction: {num_constraints}"
         )
-
-        print(f"NOTE: not applying row reduction...")
-        """
-        for some reason this is taking forever...
-        stacked_matrix = hstack([quadratic_terms, linear_terms])
-        stacked_matrix = get_row_space_sparse(stacked_matrix)
-        num_constraints = stacked_matrix.shape[0]
-        linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
-        quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
+        print("Skipping row reduction")
+        if False:
+            stacked_matrix = hstack([quadratic_terms, linear_terms])
+            stacked_matrix = get_row_space_sparse(stacked_matrix)
+            num_constraints = stacked_matrix.shape[0]
+            linear_terms = stacked_matrix[:, self.param_dim_null**2 :]
+            quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
-        """
 
-        return {
+        if self.save_path is not None:
+            save_npz(self.save_path + "/quadratic_constraints_numerical_linear_term.npz", linear_terms)
+            save_npz(self.save_path + "/quadratic_constraints_numerical_quadratic_term.npz", quadratic_terms)
+
+        self.quadratic_constraints_numerical = {
             "linear": linear_terms,
-            "quadratic": quadratic_terms,
-        }
+            "quadratic": quadratic_terms.tocsr(),
+            }
 
     def clean_constraints(
         self, constraints: list[SingleTraceOperator]
@@ -1044,7 +1067,7 @@ class BootstrapSystemComplex:
 
         return cleaned_constraints
 
-    def build_bootstrap_table(self) -> csr_matrix:
+    def build_bootstrap_table(self) -> None:
         """
         Creates the bootstrap table.
 
@@ -1103,6 +1126,7 @@ class BootstrapSystemComplex:
             The bootstrap array, with shape (self.bootstrap_matrix_dim**2, self.param_dim_null).
             It has been reshaped to be a matrix.
         """
+        print("Building the bootstrap table...")
         if self.null_space_matrix is None:
             raise ValueError("Error, null space matrix has not yet been built.")
         null_space_matrix = self.null_space_matrix
@@ -1127,8 +1151,6 @@ class BootstrapSystemComplex:
                         # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
 
-        # return bootstrap_dict
-
         # map to a sparse array
         bootstrap_array = np.zeros(
             (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null),
@@ -1137,20 +1159,23 @@ class BootstrapSystemComplex:
         for (i, j, k), value in bootstrap_dict.items():
             bootstrap_array[i, j, k] = value
 
-        bootstrap_array_sparse = csr_matrix(
+        self.bootstrap_table_sparse = csr_matrix(
             bootstrap_array.reshape(
                 bootstrap_array.shape[0] * bootstrap_array.shape[1],
                 bootstrap_array.shape[2],
             )
         )
 
-        return bootstrap_array_sparse
+        if self.save_path is not None:
+            save_npz(self.save_path + "/bootstrap_table_sparse.npz", self.bootstrap_table_sparse)
 
     def get_bootstrap_matrix(self, param: np.ndarray):
         dim = self.bootstrap_matrix_dim
-        bootstrap_array_sparse = self.build_bootstrap_table()
 
-        bootstrap_matrix = np.reshape(bootstrap_array_sparse.dot(param), (dim, dim))
+        if self.bootstrap_table_sparse is None:
+            self.buid_bootstrap_table()
+
+        bootstrap_matrix = np.reshape(self.bootstrap_table_sparse.dot(param), (dim, dim))
 
         # verify that matrix is symmetric
         # the general condition is that the matrix is Hermitian, but we have made it real

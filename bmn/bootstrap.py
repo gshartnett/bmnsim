@@ -800,11 +800,6 @@ class BootstrapSystem:
             "quadratic": quadratic_terms,
             }
 
-        #return {
-        #    "linear": linear_terms,
-        #    "quadratic": quadratic_terms,
-        #}
-
     def clean_constraints(
         self, constraints: list[SingleTraceOperator]
     ) -> list[SingleTraceOperator]:
@@ -917,8 +912,6 @@ class BootstrapSystem:
                     if np.abs(x) > self.tol:
                         # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
-
-        # return bootstrap_dict
 
         # map to a sparse array
         bootstrap_array = np.zeros(
