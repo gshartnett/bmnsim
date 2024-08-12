@@ -31,7 +31,7 @@ for L in [3, 4]:
                         maxiters_cvxpy=5_000,
                         maxiters=100,
                         radius=1e6,
-                        reg=1e6,
+                        #reg=1e6,
                         )
 
     # execute

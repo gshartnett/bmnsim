@@ -264,9 +264,9 @@ def solve_bootstrap(
             )
 
     # iterate over steps
-    #for step in range(maxiters):
-    step = 0
-    while step < maxiters:
+    for step in range(maxiters):
+    #step = 0
+    #while step < maxiters:
 
         debug(f"\n\nstep = {step+1}/{maxiters}")
         debug(f"radius={radius:.4e}")
@@ -329,13 +329,15 @@ def solve_bootstrap(
             eps=eps,
         )
 
+        '''
         if param is None:
             param = init
             penalty_reg *= 0.75
             step = 0
             debug(f"param is None, resetting step=0 and reducing penalty_reg to penalty_reg={penalty_reg:.4e}")
             continue
-        step += 1
+            step += 1
+        '''
 
         # print out some diagnostic information
         quad_cons_val = get_quadratic_constraint_vector(
@@ -345,6 +347,10 @@ def solve_bootstrap(
         quad_constraint_violation_norm = np.linalg.norm(quad_cons_val)
         optimization_result["max_quad_constraint_violation"] = max_quad_constraint_violation
         optimization_result["quad_constraint_violation_norm"] = quad_constraint_violation_norm
+
+        for pair in st_operator_inhomo_constraints:
+            debug(f"st_operator_inhomo_constraints={pair[0]}, val={pair[1]:.4f})")
+        debug(f"st_op_to_minimize = {st_operator_to_minimize}")
         debug(f"penalty_reg * ||q_I|| = {penalty_reg * quad_constraint_violation_norm:.4e}")
         debug(f"norm(param) = {np.linalg.norm(param):.4e}")
         debug(f"penalty_reg * quad_constraint_violation_norm < tol = {penalty_reg * quad_constraint_violation_norm < tol}")

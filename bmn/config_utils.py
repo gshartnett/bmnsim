@@ -24,6 +24,7 @@ bootstrap_keys = [
     "simplify_quadratic",
     "impose_symmetries",
     "load_from_previously_computed",
+    "checkpoint_path",
     ]
 
 optimization_keys=[
@@ -74,6 +75,7 @@ def generate_bootstrap_configs(
     simplify_quadratic=True,
     impose_symmetries=True,
     load_from_previously_computed=False,
+    checkpoint_path=None,
     ):
 
     bootstrap_config_dict = {
@@ -84,6 +86,7 @@ def generate_bootstrap_configs(
         "simplify_quadratic": simplify_quadratic,
         "impose_symmetries": impose_symmetries,
         "load_from_previously_computed": load_from_previously_computed,
+        "checkpoint_path": checkpoint_path,
         }
 
     return bootstrap_config_dict
@@ -117,8 +120,8 @@ def generate_configs_one_matrix(
     }
 
     # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
+    #if not os.path.exists(f"configs/{config_dir}"):
+    os.makedirs(f"configs/{config_dir}", exist_ok=True)
     with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
         yaml.dump(config_data, outfile, default_flow_style=False)
 
@@ -152,8 +155,8 @@ def generate_configs_two_matrix(
     }
 
     # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
+    #if not os.path.exists(f"configs/{config_dir}"):
+    os.makedirs(f"configs/{config_dir}", exist_ok=True)
     with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
         yaml.dump(config_data, outfile, default_flow_style=False)
 
@@ -187,8 +190,8 @@ def generate_configs_three_matrix(
     }
 
     # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
+    #if not os.path.exists(f"configs/{config_dir}"):
+    os.makedirs(f"configs/{config_dir}", exist_ok=True)
     with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
         yaml.dump(config_data, outfile, default_flow_style=False)
 
@@ -220,8 +223,8 @@ def generate_configs_bfss(
     }
 
     # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
+    #if not os.path.exists(f"configs/{config_dir}"):
+    os.makedirs(f"configs/{config_dir}", exist_ok=True)
     with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
         yaml.dump(config_data, outfile, default_flow_style=False)
 
@@ -254,8 +257,8 @@ def generate_configs_bmn(
     }
 
     # write to yaml
-    if not os.path.exists(f"configs/{config_dir}"):
-        os.makedirs(f"configs/{config_dir}")
+    #if not os.path.exists(f"configs/{config_dir}"):
+    os.makedirs(f"configs/{config_dir}", exist_ok=True)
     with open(f"configs/{config_dir}/{config_filename}.yaml", "w") as outfile:
         yaml.dump(config_data, outfile, default_flow_style=False)
 
@@ -272,17 +275,17 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
     config_optimizer = config["optimizer"]
 
     # build the model
-    #if not os.path.exists(f"data/{config_dir}"):
-    #    os.makedirs(f"data/{config_dir}")
     model = globals()[config_model["model name"]](couplings=config_model["couplings"])
-    save_path = f"data/" + config_model["model name"] + "_L_" + str(config_bootstrap["max_degree_L"])
+
+    # checkpoint path
+    if config_bootstrap["checkpoint_path"] is None:
+        checkpoint_path = f"checkpoints/" + config_model["model name"] + "_L_" + str(config_bootstrap["max_degree_L"])
+    else:
+        checkpoint_path = "checkpoints/" + config_bootstrap["checkpoint_path"]
 
     # handle the imposition of global symmetries
     if not config_bootstrap["impose_symmetries"]:
         model.symmetry_generators = None
-    if model.symmetry_generators is not None:
-        save_path = save_path + "_symmetric"
-    #print(save_path, os.path.exists(save_path), config_bootstrap["load_from_previously_computed"])
 
     # operator to minimize
     st_operator_to_minimize = model.operators_to_track[config_bootstrap["st_operator_to_minimize"]]
@@ -305,12 +308,12 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
         simplify_quadratic=config_bootstrap["simplify_quadratic"],
         symmetry_generators=model.symmetry_generators,
         verbose=verbose,
-        save_path=save_path,
+        checkpoint_path=checkpoint_path,
     )
 
     # load previously-computed constraints
-    if config_bootstrap["load_from_previously_computed"] and os.path.exists(save_path):
-        bootstrap.load_constraints(save_path)
+    if config_bootstrap["load_from_previously_computed"] and os.path.exists(checkpoint_path):
+        bootstrap.load_constraints(checkpoint_path)
 
     # solve the bootstrap
     param, optimization_result = solve_bootstrap(
@@ -329,7 +332,10 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
     # save the results
     result = optimization_result | expectation_values
     result["param"] = list(param)
-    with open(f"{save_path}/{config_filename}.json", "w") as f:
+
+    #if not os.path.exists(f"data/{config_dir}"):
+    os.makedirs(f"data/{config_dir}", exist_ok=True)
+    with open(f"data/{config_dir}/{config_filename}.json", "w") as f:
         json.dump(result, f)
 
     return result

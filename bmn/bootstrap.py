@@ -31,6 +31,7 @@ from bmn.linear_algebra import (
     get_real_coefficients_from_dict,
     get_row_space_sparse,
 )
+import psutil
 
 
 class BootstrapSystem:
@@ -49,7 +50,7 @@ class BootstrapSystem:
         odd_degree_vanish=True,
         simplify_quadratic=True,
         verbose: bool = False,
-        save_path: Optional[str] = None,
+        checkpoint_path: Optional[str] = None,
     ):
         self.matrix_system = matrix_system
         self.hamiltonian = hamiltonian
@@ -69,10 +70,10 @@ class BootstrapSystem:
         self.bootstrap_table_sparse = None
         self.simplify_quadratic = simplify_quadratic
         self.symmetry_generators = symmetry_generators
-        self.save_path = save_path
-        if self.save_path is not None:
-            if not os.path.exists(self.save_path):
-                os.makedirs(self.save_path)
+        self.checkpoint_path = checkpoint_path
+        if self.checkpoint_path is not None:
+            #if not os.path.exists(self.checkpoint_path):
+            os.makedirs(self.checkpoint_path, exist_ok=True)
         print(f"NOTE Remember to incorporate more general basis changes!")
         self.verbose = verbose
         self._validate()
@@ -135,8 +136,8 @@ class BootstrapSystem:
         self.param_dim_null = self.null_space_matrix.shape[1]
         print(f"Null space dimension (number of parameters) = {self.param_dim_null}")
 
-        if self.save_path is not None:
-            save_npz(self.save_path + "/null_space_matrix.npz", self.null_space_matrix)
+        if self.checkpoint_path is not None:
+            save_npz(self.checkpoint_path + "/null_space_matrix.npz", self.null_space_matrix)
 
     def generate_operators(self, max_degree: int) -> list[str]:
         """
@@ -192,7 +193,7 @@ class BootstrapSystem:
         if not os.path.exists(path):
             raise ValueError(f"Error, save path {path} does not exist.")
 
-        print("Attempting to load from previously computed data")
+        print(f"Attempting to load from checkpoints, checkpoint_dir={path}")
 
         # load the linear constraints
         if os.path.exists(path + "/linear_constraints_data.pkl"):
@@ -627,10 +628,10 @@ class BootstrapSystem:
         )
 
         # save the constraints
-        if self.save_path is not None:
-            with open(self.save_path + "/linear_constraints_data.pkl", "wb") as f:
+        if self.checkpoint_path is not None:
+            with open(self.checkpoint_path + "/linear_constraints_data.pkl", "wb") as f:
                 pickle.dump([constraint.data for constraint in linear_constraints], f)
-            with open(self.save_path + "/cyclic_quadratic.pkl", "wb") as f:
+            with open(self.checkpoint_path + "/cyclic_quadratic.pkl", "wb") as f:
                 cyclic_data_dict = {}
                 for key, value in cyclic_quadratic.items():
                     cyclic_data_dict[key] = {
@@ -732,14 +733,18 @@ class BootstrapSystem:
             quadratic_constraints.items()
         ):
 
+            if self.verbose:
+                debug(
+                    f"Generating quadratic constraints, operator {constraint_idx+1}/{len(quadratic_constraints)}"
+                )
+            debug(f"Memory usage: {psutil.Process().memory_info().rss / 1024 ** 2}")
+
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
 
             # initialize the quadratic constraint matrix
             linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
             quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
-
-            # worry about symmetrization of quadratic matrix
 
             # transform to null basis
             # the minus sign is very important: (-RHS + LHS = 0)
@@ -756,12 +761,15 @@ class BootstrapSystem:
 
             if self.simplify_quadratic:
                 if not quadratic_is_zero:
+                    debug("AAAA")
                     linear_terms.append(csr_matrix(linear_constraint_vector))
                     quadratic_terms.append(quadratic_matrix)
                 elif not linear_is_zero:
+                    debug("BBBB")
                     additional_constraints.append(lhs)
             else:
                 if not quadratic_is_zero or not linear_is_zero:
+                    debug(f"CCCC, quadratic_is_zero={linear_is_zero}, quadratic_is_zero={linear_is_zero}")
                     linear_terms.append(csr_matrix(linear_constraint_vector))
                     quadratic_terms.append(quadratic_matrix)
 
@@ -791,9 +799,9 @@ class BootstrapSystem:
         quadratic_terms = stacked_matrix[:, : self.param_dim_null**2]
         print(f"Number of quadratic constraints after row reduction: {num_constraints}")
 
-        if self.save_path is not None:
-            save_npz(self.save_path + "/quadratic_constraints_numerical_linear_term.npz", linear_terms)
-            save_npz(self.save_path + "/quadratic_constraints_numerical_quadratic_term.npz", quadratic_terms)
+        if self.checkpoint_path is not None:
+            save_npz(self.checkpoint_path + "/quadratic_constraints_numerical_linear_term.npz", linear_terms)
+            save_npz(self.checkpoint_path + "/quadratic_constraints_numerical_quadratic_term.npz", quadratic_terms)
 
         self.quadratic_constraints_numerical = {
             "linear": linear_terms,
@@ -928,8 +936,8 @@ class BootstrapSystem:
             )
         )
 
-        if self.save_path is not None:
-            save_npz(self.save_path + "/bootstrap_table_sparse.npz", self.bootstrap_table_sparse)
+        if self.checkpoint_path is not None:
+            save_npz(self.checkpoint_path + "/bootstrap_table_sparse.npz", self.bootstrap_table_sparse)
 
     def get_bootstrap_matrix(self, param: np.ndarray):
 
