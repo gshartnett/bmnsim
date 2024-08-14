@@ -31,28 +31,33 @@ optimization_keys=[
     "init_scale",
     "maxiters",
     "maxiters_cvxpy",
+    "cvxpy_solver",
     "tol",
     'reg',
     "penalty_reg",
     "penalty_reg_decay_rate",
     "eps",
     "radius",
+    "PRNG_seed",
     ]
 
 
 def generate_optimization_configs(
-    init_scale=1e2,
+    PRNG_seed=None,
+    init_scale=1e0,
     maxiters=100,
-    maxiters_cvxpy=10_000,
-    tol=1e-6,
+    maxiters_cvxpy=25_000,
+    tol=1e-7,
     reg=1e-4,
-    penalty_reg=1e6,
+    penalty_reg=1e5,
     penalty_reg_decay_rate=None,
     eps=1e-4,
     radius=1e5,
+    cvxpy_solver='SCS',
     ):
 
     optimization_config_dict={
+        "PRNG_seed": PRNG_seed,
         "init_scale": init_scale,
         "maxiters": maxiters,
         "maxiters_cvxpy": maxiters_cvxpy,
@@ -62,6 +67,7 @@ def generate_optimization_configs(
         "penalty_reg_decay_rate": penalty_reg_decay_rate,
         "eps": eps,
         "radius": radius,
+        "cvxpy_solver": cvxpy_solver,
         }
 
     return optimization_config_dict

@@ -40,6 +40,7 @@ def sdp_minimize(
     reg: float = 1e-4,
     penalty_reg: float = 1e6,
     verbose: bool = False,
+    cvxpy_solver: str='SCS',
 ) -> tuple[bool, str, np.ndarray]:
     """
     Performs the following SDP minimization over the vector variable x:
@@ -89,6 +90,15 @@ def sdp_minimize(
             a str containing the optimization status
             a numpy array with the final, optimized vector
     """
+    if cvxpy_solver == "SCS":
+        solver = cp.SCS
+    elif cvxpy_solver == "ECOS":
+        solver = cp.ECOS
+    elif cvxpy_solver == "OSQP":
+        solver = cp.OSQP
+    else:
+        raise NotImplementedError
+
     # initialize the cvxpy parameter vector in the null space
     num_variables = init.size
     param = cp.Variable(num_variables)
@@ -114,7 +124,7 @@ def sdp_minimize(
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
-    prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=cp.SCS)
+    prob.solve(verbose=verbose, max_iters=maxiters, eps=eps, solver=solver)
 
     if param.value is None:
         return None, None
@@ -129,6 +139,7 @@ def sdp_minimize(
     debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}")
 
     optimization_result = {
+        "solver": cvxpy_solver,
         "prob.status": prob.status,
         "prob.value": prob.value,
         "maxiters_cvxpy": maxiters,
@@ -155,8 +166,9 @@ def solve_bootstrap(
     reg: float = 1e-4,
     penalty_reg: float = 1e6,
     penalty_reg_decay_rate: Optional[float] = None,
-    use_newton = True,
+    PRNG_seed = None,
     radius: float = 1e8,
+    cvxpy_solver: str = 'SCS',
     ) -> np.ndarray:
     """
     Solve the bootstrap by minimizing the objective function subject to
@@ -196,8 +208,9 @@ def solve_bootstrap(
     ValueError
         _description_
     """
-    #np.random.seed(123)
-    #debug(f"setting PRNG seed!")
+    if PRNG_seed is not None:
+        np.random.seed(PRNG_seed)
+        debug(f"setting PRNG seed to {PRNG_seed}")
 
     #print(f"tol={tol:.4e}")
     #assert 1==0
@@ -268,12 +281,18 @@ def solve_bootstrap(
     #step = 0
     #while step < maxiters:
 
-        debug(f"\n\nstep = {step+1}/{maxiters}")
-        debug(f"radius={radius:.4e}")
-        debug(f"reg={reg:.4e}")
-        debug(f"penalty_reg={penalty_reg:.4e}")
-        debug(f"eps={eps:.4e}")
-        debug(f"init_scale={init_scale:.4e}")
+        debug(f"\n\nstep: {step+1}/{maxiters}")
+        debug(f"PRNG seed: {PRNG_seed}")
+        debug(f"radius: {radius:.4e}")
+        debug(f"reg: {reg:.4e}")
+        debug(f"penalty_reg: {penalty_reg:.4e}")
+        debug(f"eps: {eps:.4e}")
+        debug(f"init_scale: {init_scale:.4e}")
+        debug(f"tol: {tol:.4e}")
+        debug(f"cvxpy_solver: {cvxpy_solver}")
+        for pair in st_operator_inhomo_constraints:
+            debug(f"st_operator_inhomo_constraints: {pair[0]}, val={pair[1]:.4f})")
+        debug(f"st_op_to_minimize: {st_operator_to_minimize}")
 
         # build the Newton method update for the quadratic constraints, which
         # produces a second inhomogenous linear equation A' x = b'
@@ -327,6 +346,7 @@ def solve_bootstrap(
             maxiters=maxiters_cvxpy,
             penalty_reg=penalty_reg,
             eps=eps,
+            cvxpy_solver=cvxpy_solver,
         )
 
         '''
@@ -348,12 +368,9 @@ def solve_bootstrap(
         optimization_result["max_quad_constraint_violation"] = max_quad_constraint_violation
         optimization_result["quad_constraint_violation_norm"] = quad_constraint_violation_norm
 
-        for pair in st_operator_inhomo_constraints:
-            debug(f"st_operator_inhomo_constraints={pair[0]}, val={pair[1]:.4f})")
-        debug(f"st_op_to_minimize = {st_operator_to_minimize}")
-        debug(f"penalty_reg * ||q_I|| = {penalty_reg * quad_constraint_violation_norm:.4e}")
+        #debug(f"penalty_reg * ||q_I|| = {penalty_reg * quad_constraint_violation_norm:.4e}")
         debug(f"norm(param) = {np.linalg.norm(param):.4e}")
-        debug(f"penalty_reg * quad_constraint_violation_norm < tol = {penalty_reg * quad_constraint_violation_norm < tol}")
+        #debug(f"penalty_reg * quad_constraint_violation_norm < tol = {penalty_reg * quad_constraint_violation_norm < tol}")
         debug(f"max violation of quadratic constraints: {max_quad_constraint_violation:.4e}")
         debug(f"objective: {linear_objective_vector @ param:.4f}")
 

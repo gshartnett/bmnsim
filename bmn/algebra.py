@@ -45,6 +45,10 @@ class AbstractMatrixOperator:
             new_data[op] = new_data.get(op, 0) - coeff
         return self.__class__(data=new_data)
 
+    def __neg__(self) -> Self:
+        return self.__class__(data={op: -coeff for op, coeff in self})
+
+
     def __rmul__(self, other: Number):
         if isinstance(other, Number):
             new_data = {op: other * coeff for op, coeff in self}

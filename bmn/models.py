@@ -109,11 +109,12 @@ class TwoMatrix(MatrixModel):
             "energy": self.hamiltonian,
             "x_2": SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1}),
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1}),
+            "XYXY": SingleTraceOperator(data={("X0", "X1", "X0", "X1"): 1}),
             "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1}),
             "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1}),
             "neg_commutator_squared": SingleTraceOperator(data={
                 ("X0", "X1", "X0", "X1"): -1,
-                ("X1", "X0", "X1", "X0"): 1,
+                ("X1", "X0", "X1", "X0"): -1,
                 ("X0", "X1", "X1", "X0"): 1,
                 ("X1", "X0", "X0", "X1"): 1,
                 }
@@ -192,7 +193,7 @@ class ThreeMatrix(MatrixModel):
             "neg_commutator_squared": SingleTraceOperator(data={
                 # quartic term (XY)
                 ("X0", "X1", "X0", "X1"): -1,
-                ("X1", "X0", "X1", "X0"): 1,
+                ("X1", "X0", "X1", "X0"): -1,
                 ("X0", "X1", "X1", "X0"): 1,
                 ("X1", "X0", "X0", "X1"): 1,
                 # quartic term (XZ)
@@ -281,7 +282,7 @@ class MiniBFSS(MatrixModel):
             "neg_commutator_squared": SingleTraceOperator(data={
                 # quartic term (XY)
                 ("X0", "X1", "X0", "X1"): -1,
-                ("X1", "X0", "X1", "X0"): 1,
+                ("X1", "X0", "X1", "X0"): -1,
                 ("X0", "X1", "X1", "X0"): 1,
                 ("X1", "X0", "X0", "X1"): 1,
                 # quartic term (XZ)
