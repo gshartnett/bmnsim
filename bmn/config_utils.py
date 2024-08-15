@@ -2,6 +2,7 @@ import os
 import json
 import yaml
 import fire
+import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from bmn.algebra import SingleTraceOperator
 from bmn.bootstrap import BootstrapSystem
@@ -44,12 +45,12 @@ optimization_keys=[
 
 def generate_optimization_configs(
     PRNG_seed=None,
-    init_scale=1e0,
+    init_scale=1e2,
     maxiters=100,
-    maxiters_cvxpy=25_000,
-    tol=1e-7,
+    maxiters_cvxpy=30_000,
+    tol=1e-8,
     reg=1e-4,
-    penalty_reg=1e5,
+    penalty_reg=1e6,
     penalty_reg_decay_rate=None,
     eps=1e-4,
     radius=1e5,
@@ -351,6 +352,7 @@ def run_all_configs(config_dir, parallel=False, max_workers=6):
 
     config_filenames = os.listdir(f"configs/{config_dir}")
     config_filenames = [f[:-5] for f in config_filenames if '.yaml' in f]
+    np.random.shuffle(config_filenames) # shuffle
 
     if not parallel:
         for config_filename in config_filenames:

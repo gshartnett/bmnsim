@@ -374,6 +374,9 @@ def solve_bootstrap(
         debug(f"max violation of quadratic constraints: {max_quad_constraint_violation:.4e}")
         debug(f"objective: {linear_objective_vector @ param:.4f}")
 
+        # add the seed to the result
+        optimization_result["PRNG_seed"] = PRNG_seed
+
         # terminate early if the tolerance is satisfied
         #if penalty_reg * quad_constraint_violation_norm < tol:
         if max_quad_constraint_violation < tol:
