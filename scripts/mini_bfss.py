@@ -11,8 +11,8 @@ else:
     dir_name = f"MiniBFSS_L_{L}"
 
 num_seeds = 1
-for st_operator_to_minimize in ["x_2", "neg_x2", "x_4"]:
-    for energy in np.linspace(0.9, 2.5, 30):
+for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4"]:
+    for energy in np.linspace(0.5, 2.5, 30):
         for PRNG_seed in range(num_seeds):
 
             energy = float(np.round(energy, decimals=6))
@@ -26,7 +26,10 @@ for st_operator_to_minimize in ["x_2", "neg_x2", "x_4"]:
                 load_from_previously_computed=True,
                 checkpoint_path=f"MiniBFSS_L_{L}_symmetric",
                 impose_symmetries=impose_symmetries,
-                PRNG_seed=PRNG_seed,
+                maxiters_cvxpy=10_000,
+                init_scale=1e0,
+                penalty_reg=1e6,
+                #PRNG_seed=PRNG_seed,
                 )
 
 # execute
@@ -38,6 +41,7 @@ L = 3
 dir_name = f"MiniBFSS_L_{L}_symmetric_min_energy"
 checkpoint_path = f"MiniBFSS_L_{L}_symmetric"
 
+#for PRNG_seed in range(6):
 generate_configs_bfss(
     config_filename=f"test",
     config_dir=dir_name,
@@ -45,6 +49,8 @@ generate_configs_bfss(
     checkpoint_path=checkpoint_path,
     max_degree_L=L,
     load_from_previously_computed=True,
+    #PRNG_seed=PRNG_seed,
+    maxiters_cvxpy=5_000,
     )
 
 # execute

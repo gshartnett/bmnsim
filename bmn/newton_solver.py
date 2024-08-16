@@ -239,6 +239,9 @@ def solve_bootstrap(
     if init is None:
         debug(f"Initializing randomly")
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
+    else:
+        init = np.asarray(init)
+        debug(f"Initializing as param={init}")
     param = init
 
     # map the single trace operator whose expectation value we wish to minimize to a coefficient vector

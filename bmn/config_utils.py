@@ -9,6 +9,8 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.models import OneMatrix, TwoMatrix, MiniBFSS, ThreeMatrix, MiniBMN
 from bmn.newton_solver import solve_bootstrap
+from bmn.solver import solve_bootstrap as solve_bootstrap_trust_region
+
 
 # TODO
 # CHECK - ability to set certain operators to be a certain value
@@ -30,6 +32,7 @@ bootstrap_keys = [
 
 optimization_keys=[
     "init_scale",
+    "init",
     "maxiters",
     "maxiters_cvxpy",
     "cvxpy_solver",
@@ -45,10 +48,11 @@ optimization_keys=[
 
 def generate_optimization_configs(
     PRNG_seed=None,
+    init=None,
     init_scale=1e2,
     maxiters=100,
-    maxiters_cvxpy=30_000,
-    tol=1e-8,
+    maxiters_cvxpy=10_000,
+    tol=1e-7,
     reg=1e-4,
     penalty_reg=1e6,
     penalty_reg_decay_rate=None,
@@ -58,6 +62,7 @@ def generate_optimization_configs(
     ):
 
     optimization_config_dict={
+        "init": init,
         "PRNG_seed": PRNG_seed,
         "init_scale": init_scale,
         "maxiters": maxiters,
@@ -323,6 +328,7 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
         bootstrap.load_constraints(checkpoint_path)
 
     # solve the bootstrap
+    #param, optimization_result = solve_bootstrap_trust_region(
     param, optimization_result = solve_bootstrap(
         bootstrap=bootstrap,
         st_operator_to_minimize=st_operator_to_minimize,
