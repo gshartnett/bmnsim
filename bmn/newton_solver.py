@@ -308,34 +308,19 @@ def solve_bootstrap(
         #grad_pinv = np.linalg.pinv(quad_cons_grad)
 
         # how to handle the quadratic constraints (in progress)
-        if step < 5:
+        if step < 1:
             # only use Ax=b for the non-quadratic constraints
             # impose the quadratic constraints via a penalty term
             debug(f"Not using Ax=b for quadratic constraints")
             linear_inhomogeneous_eq = linear_inhomogeneous_eq_no_quadratic
-            linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
-        else:
-            # TODO still working on what I want to do here
-            #linear_inhomogeneous_penalty = None
-            debug(f"Using Ax=b for quadratic constraints")
-            linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
-            linear_inhomogeneous_eq = (
-                sparse.vstack([linear_inhomogeneous_eq_no_quadratic[0], quad_cons_grad]),
-                np.append(linear_inhomogeneous_eq_no_quadratic[1], np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
-                )
-        '''
-        if step == 0:
-            # only use Ax=b for the non-quadratic constraints
-            debug(f"Not using Ax=b for quadratic constraints")
-            linear_inhomogeneous_eq = linear_inhomogeneous_eq_no_quadratic
-            #linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
         else:
             debug(f"Using Ax=b for quadratic constraints")
             linear_inhomogeneous_eq = (
                 sparse.vstack([linear_inhomogeneous_eq_no_quadratic[0], quad_cons_grad]),
                 np.append(linear_inhomogeneous_eq_no_quadratic[1], np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
                 )
-        '''
+
+        linear_inhomogeneous_penalty = (quad_cons_grad, np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0])
 
         # perform the inner convex minimization
         param, optimization_result = sdp_minimize(

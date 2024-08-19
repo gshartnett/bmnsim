@@ -6,6 +6,7 @@ from numbers import Number
 from typing import (
     Self,
     Union,
+    Optional
 )
 
 import cvxpy as cp
@@ -57,10 +58,10 @@ def compute_L2_norm_of_quadratic_constraints(quadratic_constraints, param):
     return np.sum(np.square(linear_term + quadratic_term))
 
 
-def minimal_eigval(bootstrap_array_sparse, parameter_vector_null):
-    dim = int(np.sqrt(bootstrap_array_sparse.shape[0]))
+def minimal_eigval(bootstrap_table_sparse, parameter_vector_null):
+    dim = int(np.sqrt(bootstrap_table_sparse.shape[0]))
     bootstrap_matrix = np.reshape(
-        bootstrap_array_sparse.dot(parameter_vector_null), (dim, dim)
+        bootstrap_table_sparse.dot(parameter_vector_null), (dim, dim)
     )
 
     if not np.allclose(
@@ -73,7 +74,7 @@ def minimal_eigval(bootstrap_array_sparse, parameter_vector_null):
 
 
 def sdp_init(
-    bootstrap_array_sparse, A, b, init, reg=1, maxiters=5_000, eps=1e-4, verbose=True
+    bootstrap_table_sparse, A, b, init, reg=1, maxiters=5_000, eps=1e-4, verbose=True
 ):
     """
     Finds the parameters such that
@@ -97,8 +98,8 @@ def sdp_init(
     param = cp.Variable(num_variables)
 
     # the PSD constraint(s) (multiple if bootstrap matrix is block diagonal)
-    size = int(np.sqrt(bootstrap_array_sparse.shape[0]))
-    constraints = [cp.reshape(bootstrap_array_sparse @ param, (size, size)) >> 0]
+    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
+    constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
 
     # solve the above described optimization problem
     prob = cp.Problem(
@@ -116,7 +117,7 @@ def sdp_init(
 
 
 def sdp_relax(
-    bootstrap_array_sparse,
+    bootstrap_table_sparse,
     A,
     b,
     init,
@@ -151,8 +152,8 @@ def sdp_relax(
     # 1. ||param - init||_2 <= relax_rate * radius
     # 2. the PSD bootstrap constraint(s)
     constraints = [cp.norm(param - init) <= relax_rate * radius]
-    size = int(np.sqrt(bootstrap_array_sparse.shape[0]))
-    constraints = [cp.reshape(bootstrap_array_sparse @ param, (size, size)) >> 0]
+    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
+    constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
 
     # solve the above described optimization problem
     prob = cp.Problem(cp.Minimize(cp.norm(A @ param - b)), constraints)
@@ -166,7 +167,7 @@ def sdp_relax(
 
 def sdp_minimize(
     vec,
-    bootstrap_array_sparse,
+    bootstrap_table_sparse,
     A,
     b,
     init,
@@ -205,8 +206,8 @@ def sdp_minimize(
     # 2. the PSD bootstrap constraint(s)
     # 3. A @ param == 0
     constraints = [cp.norm(param - init) <= radius]
-    size = int(np.sqrt(bootstrap_array_sparse.shape[0]))
-    constraints = [cp.reshape(bootstrap_array_sparse @ param, (size, size)) >> 0]
+    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
+    constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
     constraints += [A @ param == b]
 
     # the loss to minimize
@@ -218,8 +219,30 @@ def sdp_minimize(
 
     if str(prob.status) != "optimal":
         debug("WARNING: sdp_minimize unexpected status: " + prob.status)
-    return param.value, prob.status, prob.value
 
+    if param.value is None:
+        return None, None
+
+    # log information on the extent to which the constraints are satisfied
+    ball_constraint = np.linalg.norm(param.value- init)
+    violation_of_linear_constraints = np.linalg.norm(A @ param.value - b)
+    min_bootstrap_eigenvalue = np.linalg.eigvalsh((bootstrap_table_sparse @ param.value).reshape(size, size))[0]
+    debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
+    debug(f"sdp_minimize ||x - init||: {ball_constraint:.4e}")
+    debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
+    debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}")
+
+    optimization_result = {
+        #"solver": cvxpy_solver,
+        "prob.status": prob.status,
+        "prob.value": prob.value,
+        "maxiters_cvxpy": maxiters,
+        "||x-init||": ball_constraint,
+        "violation_of_linear_constraints": violation_of_linear_constraints,
+        "min_bootstrap_eigenvalue": min_bootstrap_eigenvalue,
+    }
+
+    return param.value, optimization_result
 
 def get_quadratic_constraint_vector_dense(
     quadratic_constraints: dict[str, np.ndarray],
@@ -342,17 +365,26 @@ def get_quadratic_constraint_vector_sparse(
     return constraint_vector, constraint_grad
 
 
-def minimize(
-    bootstrap,
-    op,
-    init=None,
-    init_scale=1.0,
-    op_cons=[(SingleTraceOperator(data={(): 1}), 1)],
+def solve_bootstrap(
+    bootstrap: BootstrapSystem,
+    st_operator_to_minimize: SingleTraceOperator,
+    init:Optional[np.ndarray]=None,
+    init_scale:float=1.0,
+    st_operator_inhomo_constraints=[
+        (SingleTraceOperator(data={(): 1}), 1)
+        ],
     maxiters=25,
     eps=5e-4,
     reg=5e-4,
     relax_rate=0.8,
+    maxiters_cvxpy:int=2500,
     verbose=True,
+    PRNG_seed = None,
+    cvxpy_solver = None,
+    penalty_reg = None,
+    penalty_reg_decay_rate = None,
+    tol=None,
+    radius = None,
     savefile="",
 ):
     """
@@ -373,10 +405,37 @@ def minimize(
     Returns:
             param (numpy array of shape (num_variables,)): the optimal value of parameters found
     """
-    # get the quantities needed for numerics
-    linear_constraint_matrix = bootstrap.build_linear_constraints().tocsr()
-    quadratic_constraints = bootstrap.build_quadratic_constraints()
-    bootstrap_array_sparse = bootstrap.build_bootstrap_table()
+    if PRNG_seed is not None:
+        np.random.seed(PRNG_seed)
+        debug(f"setting PRNG seed to {PRNG_seed}")
+
+    # get the bootstrap constraints necessary for the optimization
+    # linear constraints
+    if bootstrap.linear_constraints is None:
+        _ = bootstrap.build_linear_constraints().tocsr()
+
+    # quadratic constraints
+    if bootstrap.quadratic_constraints_numerical is None:
+        bootstrap.build_quadratic_constraints()
+    quadratic_constraints_numerical = bootstrap.quadratic_constraints_numerical
+
+    # bootstrap table
+    if bootstrap.bootstrap_table_sparse is None:
+        bootstrap.build_bootstrap_table()
+    bootstrap_table_sparse = bootstrap.bootstrap_table_sparse
+
+    debug(f"Final bootstrap parameter dimension: {bootstrap.param_dim_null}")
+    # initialize the variable vector
+    if init is None:
+        debug(f"Initializing randomly")
+        init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
+    param = init
+
+
+    #### get the quantities needed for numerics
+    #linear_constraint_matrix = bootstrap.build_linear_constraints().tocsr()
+    #quadratic_constraints = bootstrap.build_quadratic_constraints()
+    #bootstrap_table_sparse = bootstrap.build_bootstrap_table()
 
     if init is None:
         # initial parameter vector
@@ -393,7 +452,7 @@ def minimize(
     # init = bootstrap.scale_param_to_enforce_normalization(init)  # rescale to normalize
 
     # vector corresponding to op to minimize (typically the Hamiltonian)
-    vec = bootstrap.single_trace_to_coefficient_vector(op, return_null_basis=True)
+    vec = bootstrap.single_trace_to_coefficient_vector(st_operator_to_minimize, return_null_basis=True)
     vec = vec.real  # TODO check this!
 
     # the loss function to minimize, i.e., the value of op
@@ -403,7 +462,7 @@ def minimize(
     # extra constraints in op_cons, i.e., <o> = v for o, v in op_cons
     A_op = sparse.csr_matrix((0, bootstrap.param_dim_null))
     b_op = np.zeros(0)
-    for op, value in op_cons:
+    for op, value in st_operator_inhomo_constraints:
         A_op = sparse.vstack(
             [
                 A_op,
@@ -418,7 +477,8 @@ def minimize(
 
     # initialize parameters from file or from scratch
     last_param = None
-    if savefile and os.path.isfile(savefile + ".npz"):
+    #if savefile and os.path.isfile(savefile + ".npz"):
+    if False:
         npzfile = np.load(savefile + ".npz")
         radius, obs = npzfile["radius"], npzfile["obs"]
         param = lsqr(linear_constraint_matrix, obs)[0]
@@ -429,7 +489,7 @@ def minimize(
             )
         )
         debug(
-            "minimal_eigval: {}".format(minimal_eigval(bootstrap_array_sparse, param))
+            "minimal_eigval: {}".format(minimal_eigval(bootstrap_table_sparse, param))
         )
         debug("Data read successfully")
     else:
@@ -437,7 +497,7 @@ def minimize(
         # find an initial parameter close to init that makes all bootstrap matrices positive
         # print(f"INSIDE SOLVER, param_dim_null = {bootstrap.param_dim_null}, {A_op.shape, b_op.shape, init.shape}")
         param = sdp_init(
-            bootstrap_array_sparse=bootstrap_array_sparse,
+            bootstrap_table_sparse=bootstrap_table_sparse,
             A=A_op,
             b=b_op,
             init=init,
@@ -455,15 +515,15 @@ def minimize(
         debug(f"step = {step+1}/{maxiters}")
         # combine the constraints from op_cons and linearized quadratic constraints, i.e., grad * (new_param - param) + val = 0
         val, grad = get_quadratic_constraint_vector_sparse(
-            quadratic_constraints, param, compute_grad=True
+            quadratic_constraints_numerical, param, compute_grad=True
         )
-        if step == 0:
-            quadratic_constraint_scale_vector = (
-                1 / 100 * np.abs(np.random.normal(size=10))
-            )
-            print(quadratic_constraint_scale_vector)
-        val = val / quadratic_constraint_scale_vector
-        grad = grad / quadratic_constraint_scale_vector[:, None]
+        #if step == 0:
+        #    quadratic_constraint_scale_vector = (
+        #        1 / 100 * np.abs(np.random.normal(size=10))
+        #    )
+        #    print(quadratic_constraint_scale_vector)
+        #val = val / quadratic_constraint_scale_vector
+        #grad = grad / quadratic_constraint_scale_vector[:, None]
         # print(f"min |q_I| = {min(abs(val))}, max |q_I| = {max(abs(val))}")
 
         A = sparse.vstack([A_op, grad])
@@ -471,23 +531,25 @@ def minimize(
 
         # one step
         relaxed_param = sdp_relax(
-            bootstrap_array_sparse=bootstrap_array_sparse,
+            bootstrap_table_sparse=bootstrap_table_sparse,
             A=A,
             b=b,
             init=param,
             radius=radius,
             relax_rate=relax_rate,
             verbose=verbose,
+            maxiters=maxiters_cvxpy,
         )
-        new_param, prob_status, prob_value = sdp_minimize(
+        new_param, optimization_result = sdp_minimize(
             vec,
-            bootstrap_array_sparse,
+            bootstrap_table_sparse,
             A,
             A.dot(relaxed_param),
             param,
             radius,
             reg=reg,
             verbose=verbose,
+            maxiters=maxiters_cvxpy,
         )
         if new_param is None:
             # wrongly infeasible
@@ -499,7 +561,7 @@ def minimize(
         # check progress
         cons_val = A.dot(param) - b
         maxcv = np.max(np.abs(cons_val))  # maximal constraint violation
-        min_eig = minimal_eigval(bootstrap_array_sparse, param)
+        min_eig = minimal_eigval(bootstrap_table_sparse, param)
         # if verbose:
         if True:
             print(
@@ -521,7 +583,8 @@ def minimize(
         ):
             if verbose:
                 print("Accuracy goal achieved.")
-            return param, True
+            return param, optimization_result
+
         # compute the changes in the merit function and decide whether the step should be accepted
         dloss = (
             loss(new_param)
@@ -532,7 +595,7 @@ def minimize(
             np.append(
                 A_op.dot(new_param) - b_op,
                 get_quadratic_constraint_vector_sparse(
-                    quadratic_constraints, new_param
+                    quadratic_constraints_numerical, new_param
                 ),
             )
         ) - np.linalg.norm(cons_val)
@@ -586,4 +649,4 @@ def minimize(
             eps, maxiters
         )
     )
-    return param, False
+    return param, optimization_result
