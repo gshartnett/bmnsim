@@ -8,16 +8,10 @@ from bmn.algebra import SingleTraceOperator
 from bmn.bootstrap import BootstrapSystem
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.models import OneMatrix, TwoMatrix, MiniBFSS, ThreeMatrix, MiniBMN
-from bmn.newton_solver import solve_bootstrap
-from bmn.solver import solve_bootstrap as solve_bootstrap_trust_region
+from bmn.solver_newton import solve_bootstrap as solve_bootstrap_newton
+from bmn.solver_pytorch import solve_bootstrap as solve_bootstrap_pytorch
+#from bmn.solver_trustregion import solve_bootstrap as solve_bootstrap_trust_region
 
-
-# TODO
-# CHECK - ability to set certain operators to be a certain value
-# add comments/docstrings
-# improve the keyword args situation
-# note that the loading from previously saved can get into trouble with models where
-#   the hamiltonian depends on couplings we are varying
 
 bootstrap_keys = [
     "max_degree_L",
@@ -31,7 +25,7 @@ bootstrap_keys = [
     "checkpoint_path",
     ]
 
-optimization_keys=[
+optimization_keys_newton=[
     "init_scale",
     "init",
     "maxiters",
@@ -46,8 +40,17 @@ optimization_keys=[
     "PRNG_seed",
     ]
 
+optimization_keys_pytorch=[
+    "init_scale",
+    "init",
+    "PRNG_seed",
+    "lr",
+    "gamma",
+    "num_epochs",
+    "penalty_reg",
+    ]
 
-def generate_optimization_configs(
+def generate_optimization_configs_newton(
     PRNG_seed=None,
     init=None,
     init_scale=1e2,
@@ -75,6 +78,31 @@ def generate_optimization_configs(
         "eps": eps,
         "radius": radius,
         "cvxpy_solver": cvxpy_solver,
+        "optimization_method": "newton",
+        }
+
+    return optimization_config_dict
+
+
+def generate_optimization_configs_pytorch(
+    PRNG_seed=None,
+    init=None,
+    init_scale=1e-2,
+    lr=1e-2,
+    gamma=0.999,
+    num_epochs=5_000,
+    penalty_reg=1e2,
+    ):
+
+    optimization_config_dict={
+        "init": init,
+        "PRNG_seed": PRNG_seed,
+        "init_scale": init_scale,
+        "lr": lr,
+        "gamma": gamma,
+        "num_epochs": num_epochs,
+        "penalty_reg": penalty_reg,
+        "optimization_method": "pytorch",
         }
 
     return optimization_config_dict
@@ -99,7 +127,7 @@ def generate_bootstrap_configs(
         "odd_degree_vanish": odd_degree_vanish,
         "simplify_quadratic": simplify_quadratic,
         "impose_symmetries": impose_symmetries,
-        "symmetry_method": "complete",
+        "symmetry_method": symmetry_method,
         "load_from_previously_computed": load_from_previously_computed,
         "checkpoint_path": checkpoint_path,
         }
@@ -113,15 +141,25 @@ def generate_configs_one_matrix(
     g2,
     g4,
     g6,
+    optimization_method,
     **kwargs):
+
+    if not optimization_method in ["newton", "pytorch"]:
+        raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+    if optimization_method == "newton":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
+    elif optimization_method == "pytorch":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+    if optimization_method == "newton":
+        optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
+    elif optimization_method == "pytorch":
+        optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
 
     # build the config dictionary
     config_data = {
@@ -148,15 +186,25 @@ def generate_configs_two_matrix(
     config_dir,
     g2,
     g4,
+    optimization_method,
     **kwargs):
+
+    if not optimization_method in ["newton", "pytorch"]:
+        raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+    if optimization_method == "newton":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
+    elif optimization_method == "pytorch":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+    if optimization_method == "newton":
+        optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
+    elif optimization_method == "pytorch":
+        optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
 
     # build the config dictionary
     config_data = {
@@ -183,15 +231,25 @@ def generate_configs_three_matrix(
     config_dir,
     g2,
     g4,
+    optimization_method,
     **kwargs):
+
+    if not optimization_method in ["newton", "pytorch"]:
+        raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+    if optimization_method == "newton":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
+    elif optimization_method == "pytorch":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+    if optimization_method == "newton":
+        optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
+    elif optimization_method == "pytorch":
+        optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
 
     # build the config dictionary
     config_data = {
@@ -216,15 +274,25 @@ def generate_configs_three_matrix(
 def generate_configs_bfss(
     config_filename,
     config_dir,
+    optimization_method,
     **kwargs):
+
+    if not optimization_method in ["newton", "pytorch"]:
+        raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+    if optimization_method == "newton":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
+    elif optimization_method == "pytorch":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+    if optimization_method == "newton":
+        optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
+    elif optimization_method == "pytorch":
+        optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
 
     # build the config dictionary
     config_data = {
@@ -250,15 +318,25 @@ def generate_configs_bmn(
     config_dir,
     g2,
     g4,
+    optimization_method,
     **kwargs):
+
+    if not optimization_method in ["newton", "pytorch"]:
+        raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    kwargs_optimization = {key: kwargs[key] for key in optimization_keys if key in kwargs}
+    if optimization_method == "newton":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
+    elif optimization_method == "pytorch":
+        kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    optimization_config_dict = generate_optimization_configs(**kwargs_optimization)
+    if optimization_method == "newton":
+        optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
+    elif optimization_method == "pytorch":
+        optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
 
     # build the config dictionary
     config_data = {
@@ -331,17 +409,25 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
         bootstrap.load_constraints(checkpoint_path)
 
     # solve the bootstrap
-    #param, optimization_result = solve_bootstrap_trust_region(
-    param, optimization_result = solve_bootstrap(
-        bootstrap=bootstrap,
-        st_operator_to_minimize=st_operator_to_minimize,
-        st_operator_inhomo_constraints=st_operator_inhomo_constraints,
-        **config_optimizer
-        )
+    optimization_method = config_optimizer.pop("optimization_method")
+    if optimization_method == "newton":
+        param, optimization_result = solve_bootstrap_newton(
+            bootstrap=bootstrap,
+            st_operator_to_minimize=st_operator_to_minimize,
+            st_operator_inhomo_constraints=st_operator_inhomo_constraints,
+            **config_optimizer
+            )
+    elif optimization_method == "pytorch":
+        param, optimization_result = solve_bootstrap_pytorch(
+            bootstrap=bootstrap,
+            st_operator_to_minimize=st_operator_to_minimize,
+            st_operator_inhomo_constraints=st_operator_inhomo_constraints,
+            **config_optimizer
+            )
 
     # record select expectation values
     expectation_values = {
-        name: bootstrap.get_operator_expectation_value(st_operator=st_operator, param=param).real
+        name: float(bootstrap.get_operator_expectation_value(st_operator=st_operator, param=param).real)
         for name, st_operator in model.operators_to_track.items()
         }
 
