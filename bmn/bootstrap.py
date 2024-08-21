@@ -599,9 +599,9 @@ class BootstrapSystem:
 
         # symmetry constraints
         if self.symmetry_generators is not None:
-            if self.symmetry_method == "full":
+            if self.symmetry_method == "complete":
                 symmetry_constraints = self.generate_symmetry_constraints()
-                print(f"Generated {len(symmetry_constraints)} symmetry constraints using full method")
+                print(f"Generated {len(symmetry_constraints)} symmetry constraints using complete method")
             else:
                 symmetry_constraints = self.generate_symmetry_constraints_lazy()
                 print(f"Generated {len(symmetry_constraints)} symmetry constraint using lazy approach to save time")
