@@ -2,9 +2,9 @@ import numpy as np
 from bmn.config_utils import generate_configs_bfss, run_all_configs
 
 # generate the config files
-L = 3
-dir_name = f"MiniBFSS_L_{L}_symmetric_test"
-checkpoint_path = f"MiniBFSS_L_{L}_symmetric"
+L = 4
+dir_name = f"MiniBFSS_L_{L}_symmetric_lazy_test"
+checkpoint_path = f"MiniBFSS_L_{L}_lazy_symmetric"
 
 #for PRNG_seed in range(6):
 generate_configs_bfss(
@@ -14,6 +14,7 @@ generate_configs_bfss(
     max_degree_L=L,
     load_from_previously_computed=True,
     checkpoint_path=checkpoint_path,
+    symmetry_method="lazy",
     #PRNG_seed=PRNG_seed,
     maxiters_cvxpy=10_000_000,
     eps=1e-6,

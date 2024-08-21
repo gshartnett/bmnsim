@@ -26,6 +26,7 @@ bootstrap_keys = [
     "odd_degree_vanish",
     "simplify_quadratic",
     "impose_symmetries",
+    "symmetry_method",
     "load_from_previously_computed",
     "checkpoint_path",
     ]
@@ -88,6 +89,7 @@ def generate_bootstrap_configs(
     impose_symmetries=True,
     load_from_previously_computed=False,
     checkpoint_path=None,
+    symmetry_method="complete",
     ):
 
     bootstrap_config_dict = {
@@ -97,6 +99,7 @@ def generate_bootstrap_configs(
         "odd_degree_vanish": odd_degree_vanish,
         "simplify_quadratic": simplify_quadratic,
         "impose_symmetries": impose_symmetries,
+        "symmetry_method": "complete",
         "load_from_previously_computed": load_from_previously_computed,
         "checkpoint_path": checkpoint_path,
         }

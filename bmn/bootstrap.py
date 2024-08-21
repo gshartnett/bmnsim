@@ -46,6 +46,7 @@ class BootstrapSystem:
         gauge_generator: MatrixOperator,
         max_degree_L: int,
         symmetry_generators: list[SingleTraceOperator] = None,
+        symmetry_method: str = "complete",
         tol: float = 1e-10,
         odd_degree_vanish=True,
         simplify_quadratic=True,
@@ -74,6 +75,9 @@ class BootstrapSystem:
         if self.checkpoint_path is not None:
             #if not os.path.exists(self.checkpoint_path):
             os.makedirs(self.checkpoint_path, exist_ok=True)
+        if symmetry_method not in ["complete", "lazy"]:
+            raise ValueError(f"Symmetry method {symmetry_method} not recognized.")
+        self.symmetry_method = symmetry_method
         print(f"NOTE Remember to incorporate more general basis changes!")
         self.verbose = verbose
         self._validate()
@@ -290,6 +294,17 @@ class BootstrapSystem:
 
         return mat
 
+    def generate_symmetry_constraints_lazy(self, tol=1e-10) -> list[SingleTraceOperator]:
+        if self.symmetry_generators is None:
+            return []
+        constraints = []
+        for op in self.operator_list:
+            for i in range(len(self.matrix_system.operator_basis)//2):
+                if len([term for term in op if str(i) in term]) % 2 == 1:
+                    constraints.append(SingleTraceOperator(data={op: 1}))
+                    continue
+        return self.clean_constraints(constraints)
+
     def generate_symmetry_constraints(self, tol=1e-10) -> list[SingleTraceOperator]:
         """
         Generate any symmetry constraints <[g,O]>=0 for O single trace
@@ -354,22 +369,14 @@ class BootstrapSystem:
                 counter += 1
 
                 # compute the charge under the symmetry
-                charge = sum(
-                    [eig_values[new_ops_dict[basis_op]] for basis_op in operator]
-                )
+                charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
 
                 # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
                 if np.abs(charge) > tol:
 
                     operator2 = {}
                     for i in range(len(operator)):
-                        operator2[i] = [
-                            (
-                                self.matrix_system.operator_basis[j],
-                                old_to_new_variables[new_ops_dict[operator[i]], j],
-                            )
-                            for j in range(n)
-                        ]
+                        operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j],) for j in range(n)]
 
                     # build the constraint single-trace operator
                     data = {}
@@ -418,12 +425,6 @@ class BootstrapSystem:
                     debug(
                         f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}"
                     )
-
-
-        # check for SO(2) case - move to a unit test at some point
-        # also note sign is wrong for eigenvalue...
-        # assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"X1": 1, "X2": -1j})) == - 1j * SingleTraceOperator(data={"X1": 1, "X2": -1j})
-        # assert self.matrix_system.single_trace_commutator(symmetry_generator, SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})) == - 1j * SingleTraceOperator(data={"Pi1": -1, "Pi2": 1j})
 
         return self.clean_constraints(constraints)
 
@@ -598,8 +599,12 @@ class BootstrapSystem:
 
         # symmetry constraints
         if self.symmetry_generators is not None:
-            symmetry_constraints = self.generate_symmetry_constraints()
-            print(f"Generated {len(symmetry_constraints)} symmetry constraints")
+            if self.symmetry_method == "full":
+                symmetry_constraints = self.generate_symmetry_constraints()
+                print(f"Generated {len(symmetry_constraints)} symmetry constraints using full method")
+            else:
+                symmetry_constraints = self.generate_symmetry_constraints_lazy()
+                print(f"Generated {len(symmetry_constraints)} symmetry constraint using lazy approach to save time")
             linear_constraints.extend(symmetry_constraints)
 
         # reality constraints
@@ -761,15 +766,12 @@ class BootstrapSystem:
 
             if self.simplify_quadratic:
                 if not quadratic_is_zero:
-                    debug("AAAA")
                     linear_terms.append(csr_matrix(linear_constraint_vector))
                     quadratic_terms.append(quadratic_matrix)
                 elif not linear_is_zero:
-                    debug("BBBB")
                     additional_constraints.append(lhs)
             else:
                 if not quadratic_is_zero or not linear_is_zero:
-                    debug(f"CCCC, quadratic_is_zero={linear_is_zero}, quadratic_is_zero={linear_is_zero}")
                     linear_terms.append(csr_matrix(linear_constraint_vector))
                     quadratic_terms.append(quadratic_matrix)
 

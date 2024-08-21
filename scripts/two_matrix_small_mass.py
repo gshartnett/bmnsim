@@ -48,10 +48,12 @@ generate_configs_two_matrix(
     checkpoint_path=checkpoint_path,
     max_degree_L=L,
     load_from_previously_computed=True,
-    eps=1e-6,
-    penalty_reg=0,
+    #eps=1e-6,
+    #penalty_reg=0,
+    radius=1e7,
+    impose_symmetries=False,
     #penalty_reg_decay_rate=0.5,
-    maxiters_cvxpy=1_000_000,
+    #maxiters_cvxpy=1_0_000,
     )
 # execute
 run_all_configs(config_dir=dir_name, parallel=False)
