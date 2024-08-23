@@ -2,17 +2,16 @@ import numpy as np
 from bmn.config_utils import generate_configs_two_matrix, run_all_configs, run_bootstrap_from_config
 import json
 
-'''
 ## energy held fixed
 L = 3
-num_seeds = 3
 g2 = 0
-
-config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_no_penalty"
 checkpoint_path = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
 
-for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4"]:
-    for energy in np.linspace(0.1, 1.5, 30):
+config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
+#config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_pytorch"
+
+for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:
+    for energy in np.linspace(0.4, 3.0, 40):
 
         energy = float(np.round(energy, decimals=6))
         generate_configs_two_matrix(
@@ -26,37 +25,15 @@ for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4"]:
             load_from_previously_computed=True,
             checkpoint_path=checkpoint_path,
             impose_symmetries=True,
-            eps=1e-6,
-            penalty_reg=0,
-            maxiters_cvxpy=1_000_000,
+            optimization_method="newton",
+            #optimization_method="pytorch",
+            #lr=1e0,
+            #init_scale=1e-2,
             )
-# execute
-run_all_configs(config_dir=config_dir, parallel=True)
-'''
 
-# generate the config files
-L = 4
-dir_name = f"TwoMatrix_L_{L}_symmetric_min_energy_test"
-checkpoint_path = f"TwoMatrix_L_{L}_symmetric"
-
-generate_configs_two_matrix(
-    config_filename=f"test",
-    config_dir=dir_name,
-    g2=0,
-    g4=1,
-    st_operator_to_minimize="energy",
-    checkpoint_path=checkpoint_path,
-    max_degree_L=L,
-    load_from_previously_computed=True,
-    #eps=1e-6,
-    #penalty_reg=0,
-    radius=1e7,
-    impose_symmetries=False,
-    #penalty_reg_decay_rate=0.5,
-    #maxiters_cvxpy=1_0_000,
-    )
 # execute
-run_all_configs(config_dir=dir_name, parallel=False)
+run_all_configs(config_dir=config_dir, parallel=True, max_workers=3)
+
 
 '''
 # step down from large energy

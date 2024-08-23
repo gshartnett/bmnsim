@@ -110,6 +110,7 @@ class TwoMatrix(MatrixModel):
             "x_2": SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1}),
             "neg_x_2": -SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1}),
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1}),
+            "neg_x_4": -SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1}),
             "XYXY": SingleTraceOperator(data={("X0", "X1", "X0", "X1"): 1}),
             "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1}),
             "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1}),
@@ -117,9 +118,16 @@ class TwoMatrix(MatrixModel):
                 ("X0", "X1", "X0", "X1"): -1,
                 ("X1", "X0", "X1", "X0"): -1,
                 ("X0", "X1", "X1", "X0"): 1,
-                ("X1", "X0", "X0", "X1"): 1,
-                }
-                ),
+                ("X1", "X0", "X0", "X1"): 1,}),
+            "lagrangian": SingleTraceOperator(data={
+                ("Pi0", "Pi0"): -1 / 2,
+                ("Pi1", "Pi1"): -1 / 2,
+                ("X0", "X0"): -self.couplings["g2"] / 2,
+                ("X1", "X1"): -self.couplings["g2"] / 2,
+                ("X0", "X1", "X0", "X1"): self.couplings["g4"] / 4,
+                ("X1", "X0", "X1", "X0"): self.couplings["g4"] / 4,
+                ("X0", "X1", "X1", "X0"): -self.couplings["g4"] / 4,
+                ("X1", "X0", "X0", "X1"): -self.couplings["g4"] / 4,})
                 }
 
     def build_symmetry_generators(self):
@@ -210,6 +218,31 @@ class ThreeMatrix(MatrixModel):
                 ("X2", "X1", "X1", "X2"): 1,
                 }
             ),
+            "lagrangian": SingleTraceOperator(data={
+                ("Pi0", "Pi0"): -0.5,
+                ("Pi1", "Pi1"): -0.5,
+                ("Pi2", "Pi2"): -0.5,
+                # mass term
+                ("X0", "X0"): -self.couplings["g2"] / 2,
+                ("X1", "X1"): -self.couplings["g2"] / 2,
+                ("X2", "X2"): -self.couplings["g2"] / 2,
+                # quartic term (XY)
+                ("X0", "X1", "X0", "X1"): self.couplings["g4"] / 4,
+                ("X1", "X0", "X1", "X0"): self.couplings["g4"] / 4,
+                ("X0", "X1", "X1", "X0"): -self.couplings["g4"] / 4,
+                ("X1", "X0", "X0", "X1"): -self.couplings["g4"] / 4,
+                # quartic term (XZ)
+                ("X0", "X2", "X0", "X2"): self.couplings["g4"] / 4,
+                ("X2", "X0", "X2", "X0"): self.couplings["g4"] / 4,
+                ("X0", "X2", "X2", "X0"): -self.couplings["g4"] / 4,
+                ("X2", "X0", "X0", "X2"): -self.couplings["g4"] / 4,
+                # quartic term (YZ)
+                ("X1", "X2", "X1", "X2"): self.couplings["g4"] / 4,
+                ("X2", "X1", "X2", "X1"): self.couplings["g4"] / 4,
+                ("X1", "X2", "X2", "X1"): -self.couplings["g4"] / 4,
+                ("X2", "X1", "X1", "X2"): -self.couplings["g4"] / 4,
+                }
+                )
             }
 
     def build_symmetry_generators(self):
@@ -300,6 +333,31 @@ class MiniBFSS(MatrixModel):
                 ("X2", "X1", "X1", "X2"): 1,
                 }
             ),
+            "lagrangian": SingleTraceOperator(data={
+                ("Pi0", "Pi0"): -0.5,
+                ("Pi1", "Pi1"): -0.5,
+                ("Pi2", "Pi2"): -0.5,
+                # mass term
+                ("X0", "X0"): -self.couplings["g2"] / 2,
+                ("X1", "X1"): -self.couplings["g2"] / 2,
+                ("X2", "X2"): -self.couplings["g2"] / 2,
+                # quartic term (XY)
+                ("X0", "X1", "X0", "X1"): self.couplings["g4"] / 4,
+                ("X1", "X0", "X1", "X0"): self.couplings["g4"] / 4,
+                ("X0", "X1", "X1", "X0"): -self.couplings["g4"] / 4,
+                ("X1", "X0", "X0", "X1"): -self.couplings["g4"] / 4,
+                # quartic term (XZ)
+                ("X0", "X2", "X0", "X2"): self.couplings["g4"] / 4,
+                ("X2", "X0", "X2", "X0"): self.couplings["g4"] / 4,
+                ("X0", "X2", "X2", "X0"): -self.couplings["g4"] / 4,
+                ("X2", "X0", "X0", "X2"): -self.couplings["g4"] / 4,
+                # quartic term (YZ)
+                ("X1", "X2", "X1", "X2"): self.couplings["g4"] / 4,
+                ("X2", "X1", "X2", "X1"): self.couplings["g4"] / 4,
+                ("X1", "X2", "X2", "X1"): -self.couplings["g4"] / 4,
+                ("X2", "X1", "X1", "X2"): -self.couplings["g4"] / 4,
+                }
+                ),
             }
 
     def build_symmetry_generators(self):

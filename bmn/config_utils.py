@@ -89,9 +89,12 @@ def generate_optimization_configs_pytorch(
     init=None,
     init_scale=1e-2,
     lr=1e-2,
-    gamma=0.999,
-    num_epochs=5_000,
+    gamma=0.9995,
+    num_epochs=30_000,
     penalty_reg=1e2,
+    tol=1e-8,
+    patience=100,
+    early_stopping_tol=1e-3,
     ):
 
     optimization_config_dict={
@@ -103,6 +106,9 @@ def generate_optimization_configs_pytorch(
         "num_epochs": num_epochs,
         "penalty_reg": penalty_reg,
         "optimization_method": "pytorch",
+        "tol": tol,
+        "patience": patience,
+        "early_stopping_tol": early_stopping_tol
         }
 
     return optimization_config_dict

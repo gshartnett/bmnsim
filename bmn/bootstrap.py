@@ -197,7 +197,7 @@ class BootstrapSystem:
         if not os.path.exists(path):
             raise ValueError(f"Error, save path {path} does not exist.")
 
-        print(f"Attempting to load from checkpoints, checkpoint_dir={path}")
+        print(f"Attempting to load from checkpoints, checkpoint_path={path}")
 
         # load the linear constraints
         if os.path.exists(path + "/linear_constraints_data.pkl"):
