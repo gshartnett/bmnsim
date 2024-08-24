@@ -18,6 +18,7 @@ from bmn.solver_trustregion import (
 from bmn.linear_algebra import get_null_space_dense
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+#device = torch.device("cpu")
 
 
 def solve_bootstrap(
