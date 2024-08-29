@@ -1,9 +1,9 @@
 import numpy as np
 from bmn.config_utils import generate_configs_two_matrix, run_all_configs, run_bootstrap_from_config
-import json
+
 
 ## energy held fixed
-L = 3
+L = 4
 g2 = 0
 checkpoint_path = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
 

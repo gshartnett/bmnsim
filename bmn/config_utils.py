@@ -364,7 +364,13 @@ def generate_configs_bmn(
     return
 
 
-def run_bootstrap_from_config(config_filename, config_dir, verbose=True):
+def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_if_exists_already=True):
+
+    # optionally skip if data file already exists
+    if check_if_exists_already:
+        if os.path.exists(f"data/{config_dir}/{config_filename}.json"):
+            print(f"Run result already exists, skipping.")
+            return
 
     # load the config file
     with open(f"configs/{config_dir}/{config_filename}.yaml") as stream:

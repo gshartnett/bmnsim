@@ -511,6 +511,33 @@ class BootstrapSystem:
                 constraints.append(st_operator - st_operator_dagger)
         return self.clean_constraints(constraints)
 
+    def generate_cyclic_constraint(self, op: tuple):
+        # TODO, use this in generate_cyclic_constraints
+        # the LHS corresponds to single trace operators
+        if len(op) <= 1:
+            raise ValueError("Error, expect that the operator have degree >= 1.")
+
+        eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
+            data={op[1:] + (op[0],): 1}
+        )
+
+        # rhe RHS corresponds to double trace operators
+        eq_rhs = DoubleTraceOperator(data={})
+        for k in range(1, len(op)):
+            commutator = self.matrix_system.commutation_rules[(op[0], op[k])]
+            st_operator_1 = SingleTraceOperator(data={tuple(op[1:k]): 1})
+            st_operator_2 = SingleTraceOperator(data={tuple(op[k + 1 :]): 1})
+
+            # If the double trace term involves <tr(1)> simplify and add to the linear, LHS
+            #if st_operator_1 == SingleTraceOperator(data={(): 1}):
+            #    eq_lhs -= commutator * st_operator_2
+            #elif st_operator_2 == SingleTraceOperator(data={(): 1}):
+            #    eq_lhs -= commutator * st_operator_1
+            #else:
+            eq_rhs += commutator * (st_operator_1 * st_operator_2)
+
+        return eq_lhs, eq_rhs
+
     def generate_cyclic_constraints(
         self,
     ) -> dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]:
