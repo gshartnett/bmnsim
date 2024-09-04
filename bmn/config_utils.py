@@ -84,7 +84,7 @@ def generate_optimization_configs_newton(
         "eps_infeas": eps_infeas,
         "radius": radius,
         "cvxpy_solver": cvxpy_solver,
-        "optimization_method": "newton",
+        "optimization_method": "newton_Axb",
         }
 
     return optimization_config_dict
@@ -440,6 +440,7 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
             **config_optimizer
             )
     elif optimization_method == "newton_Axb":
+        print(config_optimizer)
         param, optimization_result = solve_bootstrap_Ax_eq_b(
             bootstrap=bootstrap,
             st_operator_to_minimize=st_operator_to_minimize,

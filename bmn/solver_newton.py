@@ -307,7 +307,7 @@ def solve_bootstrap(
         debug(f"tol: {tol:.4e}")
         debug(f"cvxpy_solver: {cvxpy_solver}")
         for pair in st_operator_inhomo_constraints:
-            debug(f"st_operator_inhomo_constraints: {pair[0]}, val={pair[1]:.4f})")
+            debug(f"st_operator_inhomo_constraints: {pair[0]}, val={pair[1]:.4f}")
         debug(f"st_op_to_minimize: {st_operator_to_minimize}")
 
         # build the Newton method update for the quadratic constraints, which
@@ -514,6 +514,9 @@ def sdp_minimize_Ax_eq_b(
     #debug(f"sdp_minimize ||x - init||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
     debug(f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}")
+    debug(f"norm(param_null): {np.linalg.norm(param_null.value):.4e}")
+    debug(f"norm(param_particular): {np.linalg.norm(param_particular):.4e}")
+    debug(f"norm(param): {np.linalg.norm(param):.4e}")
 
     optimization_result = {
         "solver": cvxpy_solver,
@@ -531,10 +534,10 @@ def sdp_minimize_Ax_eq_b(
 def solve_bootstrap_Ax_eq_b(
     bootstrap: BootstrapSystem,
     st_operator_to_minimize: SingleTraceOperator,
-    init,
     st_operator_inhomo_constraints=[
         (SingleTraceOperator(data={(): 1}), 1)
         ],
+    init=None,
     maxiters:int=25,
     maxiters_cvxpy:int=2500,
     tol:float=1e-5,
@@ -609,13 +612,13 @@ def solve_bootstrap_Ax_eq_b(
 
     debug(f"Final bootstrap parameter dimension: {bootstrap.param_dim_null}")
     # initialize the variable vector
-    if init is None:
-        debug(f"Initializing randomly")
-        init = init_scale * np.random.normal(size=bootstrap.param_dim_null - len(st_operator_inhomo_constraints))
-    else:
-        init = np.asarray(init)
-        debug(f"Initializing as param={init}")
-    param_null = init
+    #if init is None:
+    #    debug(f"Initializing randomly")
+    #    init = init_scale * np.random.normal(size=bootstrap.param_dim_null - len(st_operator_inhomo_constraints))
+    #else:
+    #    init = np.asarray(init)
+    #    debug(f"Initializing as param={init}")
+    #param_null = init
 
     # map the single trace operator whose expectation value we wish to minimize to a coefficient vector
     linear_objective_vector = bootstrap.single_trace_to_coefficient_vector(
@@ -635,11 +638,11 @@ def solve_bootstrap_Ax_eq_b(
         debug(f"eps_abs: {eps_abs:.4e}")
         debug(f"eps_rel: {eps_rel:.4e}")
         debug(f"eps_infeas: {eps_infeas:.4e}")
-        debug(f"init_scale: {init_scale:.4e}")
+        #debug(f"init_scale: {init_scale:.4e}")
         debug(f"tol: {tol:.4e}")
         debug(f"cvxpy_solver: {cvxpy_solver}")
         for pair in st_operator_inhomo_constraints:
-            debug(f"st_operator_inhomo_constraints: {pair[0]}, val={pair[1]:.4f})")
+            debug(f"st_operator_inhomo_constraints: {pair[0]}, val={pair[1]:.4f}")
         debug(f"st_op_to_minimize: {st_operator_to_minimize}")
 
         # build the A, b matrix and vector for the linear inhomogeneous constraints

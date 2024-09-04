@@ -3,16 +3,17 @@ from bmn.config_utils import generate_configs_two_matrix, run_all_configs, run_b
 
 
 ## energy held fixed
-L = 4
+L = 3
 g2 = 0
 checkpoint_path = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
 
 #config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
-config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_pytorch"
+#config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_pytorch"
+config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_newton_Axb"
 
 for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:
-    for energy in np.linspace(0.4, 3.0, 40):
-
+    #for energy in np.linspace(0.4, 3.0, 40):
+    for energy in [2.4]:
         energy = float(np.round(energy, decimals=6))
         generate_configs_two_matrix(
             config_filename=f"energy_{str(energy)}_op_to_min_{st_operator_to_minimize}",
@@ -25,14 +26,22 @@ for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:
             load_from_previously_computed=True,
             checkpoint_path=checkpoint_path,
             impose_symmetries=True,
-            #optimization_method="newton",
-            optimization_method="pytorch",
-            lr=1e0,
-            init_scale=1e-2,
+            optimization_method="newton_Axb",
+            #optimization_method="pytorch",
+            #lr=1e0,
+            maxiters=10,
+            #init_scale=1e-2,
+            maxiters_cvxpy=150_000,
+            radius=5e3,
+            reg=1e-2,
+            eps_abs=1e-9,
+            eps_rel=1e-9,
+            eps_infeas=1e-9,
+            tol=1e-8,
             )
 
 # execute
-run_all_configs(config_dir=config_dir, parallel=False, max_workers=3)
+run_all_configs(config_dir=config_dir, parallel=True, max_workers=4)
 
 
 '''
