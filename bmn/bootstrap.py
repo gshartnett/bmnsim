@@ -319,122 +319,141 @@ class BootstrapSystem:
         if self.symmetry_generators is None:
             return []
 
-        constraints = []
-        counter = 0
-        n = len(self.matrix_system.operator_basis) # here, n = 2 * dim
+        d = len(self.matrix_system.operator_basis) // 2
+        symmetry_constraint_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}.pkl"
 
-        # loop over symmetry generators M
-        for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
+        # if symmetry constraints exist, load them
+        if os.path.exists(symmetry_constraint_filepath):
+            with open(symmetry_constraint_filepath, "rb") as f:
+                constraints = pickle.load(f)
+            debug(f"Loaded symmetry constraints from file {symmetry_constraint_filepath}")
 
-            # initialize a matrix M which will implement the linear action of the generator g
-            # M will obey [g, operators_vector] = M operators_vector
-            M = np.zeros(shape=(n, n), dtype=np.complex128)
-            for i, op in enumerate(self.matrix_system.operator_basis):
-                commutator = self.matrix_system.single_trace_commutator(
-                    symmetry_generator, SingleTraceOperator(data={(op): 1})
-                )
-                for op, coeff in commutator:
-                    if np.abs(coeff) > tol:
-                        j = self.matrix_system.operator_basis.index(op[0])
-                        M[i, j] = coeff
+        # otherwise, generate them
+        else:
 
-            # build the change of variables matrix
-            eig_values, old_to_new_variables = np.linalg.eig(M)
-            old_to_new_variables = old_to_new_variables.T
+            constraints = []
+            counter = 0
+            n = len(self.matrix_system.operator_basis) # here, n = 2 * dim
 
-            # confirm that the eigenvector relationship holds
-            assert np.all(
-                [
-                    np.allclose(
-                        np.zeros(n),
-                        M @ old_to_new_variables[i]
-                        - eig_values[i] * old_to_new_variables[i],
+            # loop over symmetry generators M
+            for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
+
+                # initialize a matrix M which will implement the linear action of the generator g
+                # M will obey [g, operators_vector] = M operators_vector
+                M = np.zeros(shape=(n, n), dtype=np.complex128)
+                for i, op in enumerate(self.matrix_system.operator_basis):
+                    commutator = self.matrix_system.single_trace_commutator(
+                        symmetry_generator, SingleTraceOperator(data={(op): 1})
                     )
-                    for i in range(n)
-                ]
-            )
-
-            # build all monomials using the new operators with degree < 2*L
-            new_ops_dict = {f"new_op_{i}": i for i in range(n)}
-            all_new_operators = {
-                deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
-                for deg in range(1, 2 * self.max_degree_L + 1)
-            }
-            all_new_operators = [
-                x for xs in all_new_operators.values() for x in xs
-            ]  # flatten
-
-            # loop over all operators in the eigenbasis
-            for idx, operator in enumerate(all_new_operators):
-                counter += 1
-
-                # compute the charge under the symmetry
-                charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
-
-                # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
-                if np.abs(charge) > tol:
-
-                    # intermediate data structure used to transform operator in eigen-basis to the original basis
-                    # operator2 = {
-                    #   0: ("X0", a0), ("X1", a1), ..., ("Pi0", b0), ("Pi1", b1), ...
-                    #   1: ("X0", c0), ("X1", c1), ..., ("Pi0", d0), ("Pi1", d1), ...
-                    #   ...
-                    # }
-                    # which means that the constraint operator is
-                    # (a0 "X0" + ... + b0 "Pi0") x (c0 "X0" + ... d0 "Pi0" + ...) x ...
-                    operator2 = {}
-                    for i in range(len(operator)):
-                        operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j],) for j in range(n)]
-
-                    # build the constraint single-trace operator using the above intermediate data structure
-                    data = {}
-                    for indices in list(product(range(n), repeat=len(operator))):
-                        op = tuple(
-                            [
-                                value[indices[idx]][0]
-                                for idx, value in enumerate(operator2.values())
-                            ]
-                        )
-                        coeff = np.prod(
-                            [
-                                value[indices[idx]][1]
-                                for idx, value in enumerate(operator2.values())
-                            ]
-                        )
+                    for op, coeff in commutator:
                         if np.abs(coeff) > tol:
-                            data[op] = data.get(op, 0) + coeff
-                    constraint_op = SingleTraceOperator(data=data)
+                            j = self.matrix_system.operator_basis.index(op[0])
+                            M[i, j] = coeff
 
-                    # if the constraint contains both real and imaginary terms, they must each hold separately
-                    if constraint_op.is_real():
-                        constraints.append(constraint_op)
+                # build the change of variables matrix
+                eig_values, old_to_new_variables = np.linalg.eig(M)
+                old_to_new_variables = old_to_new_variables.T
+
+                # confirm that the eigenvector relationship holds
+                assert np.all(
+                    [
+                        np.allclose(
+                            np.zeros(n),
+                            M @ old_to_new_variables[i]
+                            - eig_values[i] * old_to_new_variables[i],
+                        )
+                        for i in range(n)
+                    ]
+                )
+
+                # build all monomials using the new operators with degree < 2*L
+                new_ops_dict = {f"new_op_{i}": i for i in range(n)}
+                all_new_operators = {
+                    deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
+                    for deg in range(1, 2 * self.max_degree_L + 1)
+                }
+                all_new_operators = [
+                    x for xs in all_new_operators.values() for x in xs
+                ]  # flatten
+
+                # loop over all operators in the eigenbasis
+                for idx, operator in enumerate(all_new_operators):
+                    counter += 1
+
+                    # compute the charge under the symmetry
+                    charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
+
+                    # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
+                    if np.abs(charge) > tol:
+
+                        # intermediate data structure used to transform operator in eigen-basis to the original basis
+                        # operator2 = {
+                        #   0: ("X0", a0), ("X1", a1), ..., ("Pi0", b0), ("Pi1", b1), ...
+                        #   1: ("X0", c0), ("X1", c1), ..., ("Pi0", d0), ("Pi1", d1), ...
+                        #   ...
+                        # }
+                        # which means that the constraint operator is
+                        # (a0 "X0" + ... + b0 "Pi0") x (c0 "X0" + ... d0 "Pi0" + ...) x ...
+                        operator2 = {}
+                        for i in range(len(operator)):
+                            operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j],) for j in range(n)]
+
+                        # build the constraint single-trace operator using the above intermediate data structure
+                        data = {}
+                        for indices in list(product(range(n), repeat=len(operator))):
+                            op = tuple(
+                                [
+                                    value[indices[idx]][0]
+                                    for idx, value in enumerate(operator2.values())
+                                ]
+                            )
+                            coeff = np.prod(
+                                [
+                                    value[indices[idx]][1]
+                                    for idx, value in enumerate(operator2.values())
+                                ]
+                            )
+                            if np.abs(coeff) > tol:
+                                data[op] = data.get(op, 0) + coeff
+                        constraint_op = SingleTraceOperator(data=data)
+
+                        # if the constraint contains both real and imaginary terms, they must each hold separately
+                        if constraint_op.is_real():
+                            constraints.append(constraint_op)
+                        else:
+                            constraints.append(constraint_op.get_real_part())
+                            constraints.append(constraint_op.get_imag_part())
+
+                    """
+                    # check: charge 0 operators should commute with the generators
+                    if np.abs(charge) < tol:
+                        print('whoohoo')
+                        if not self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op) == SingleTraceOperator(data={}):
+                            print(f"charge = {charge}")
+                            print(f"constraint_op = {constraint_op}")
+                            print(self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op))
+                            raise ValueError("Commutator of uncharged operator is not zero, but it should be.")
                     else:
-                        constraints.append(constraint_op.get_real_part())
-                        constraints.append(constraint_op.get_imag_part())
+                        # if the constraint contains both real and imaginary terms, they must each hold separately
+                        if constraint_op.is_real():
+                            constraints.append(constraint_op)
+                        else:
+                            constraints.append(constraint_op.get_real_part())
+                            constraints.append(constraint_op.get_imag_part())
+                    """
+                    if self.verbose:
+                        debug(
+                            f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}, generator {symmetry_idx+1}/{len(self.symmetry_generators)}"
+                        )
 
-                """
-                # check: charge 0 operators should commute with the generators
-                if np.abs(charge) < tol:
-                    print('whoohoo')
-                    if not self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op) == SingleTraceOperator(data={}):
-                        print(f"charge = {charge}")
-                        print(f"constraint_op = {constraint_op}")
-                        print(self.matrix_system.single_trace_commutator(symmetry_generator, constraint_op))
-                        raise ValueError("Commutator of uncharged operator is not zero, but it should be.")
-                else:
-                    # if the constraint contains both real and imaginary terms, they must each hold separately
-                    if constraint_op.is_real():
-                        constraints.append(constraint_op)
-                    else:
-                        constraints.append(constraint_op.get_real_part())
-                        constraints.append(constraint_op.get_imag_part())
-                """
-                if self.verbose:
-                    debug(
-                        f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}, generator {symmetry_idx+1}/{len(self.symmetry_generators)}"
-                    )
+            # clean them
+            constraints = self.clean_constraints(constraints)
 
-        return self.clean_constraints(constraints)
+            # save them
+            with open(symmetry_constraint_filepath, "wb") as f:
+                pickle.dump(constraints, f)
+
+        return constraints
 
     def generate_hamiltonian_constraints(self) -> list[SingleTraceOperator]:
         """
@@ -645,10 +664,10 @@ class BootstrapSystem:
         if self.symmetry_generators is not None:
             if self.symmetry_method == "complete":
                 symmetry_constraints = self.generate_symmetry_constraints()
-                print(f"Generated {len(symmetry_constraints)} symmetry constraints using complete method")
             else:
                 symmetry_constraints = self.generate_symmetry_constraints_lazy()
                 print(f"Generated {len(symmetry_constraints)} symmetry constraint using lazy approach to save time")
+
             linear_constraints.extend(symmetry_constraints)
 
         # reality constraints
