@@ -321,10 +321,10 @@ class BootstrapSystem:
 
         constraints = []
         counter = 0
-        n = len(self.matrix_system.operator_basis)
+        n = len(self.matrix_system.operator_basis) # here, n = 2 * dim
 
         # loop over symmetry generators M
-        for symmetry_generator in self.symmetry_generators:
+        for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
 
             # initialize a matrix M which will implement the linear action of the generator g
             # M will obey [g, operators_vector] = M operators_vector
@@ -374,11 +374,19 @@ class BootstrapSystem:
                 # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
                 if np.abs(charge) > tol:
 
+                    # intermediate data structure used to transform operator in eigen-basis to the original basis
+                    # operator2 = {
+                    #   0: ("X0", a0), ("X1", a1), ..., ("Pi0", b0), ("Pi1", b1), ...
+                    #   1: ("X0", c0), ("X1", c1), ..., ("Pi0", d0), ("Pi1", d1), ...
+                    #   ...
+                    # }
+                    # which means that the constraint operator is
+                    # (a0 "X0" + ... + b0 "Pi0") x (c0 "X0" + ... d0 "Pi0" + ...) x ...
                     operator2 = {}
                     for i in range(len(operator)):
                         operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j],) for j in range(n)]
 
-                    # build the constraint single-trace operator
+                    # build the constraint single-trace operator using the above intermediate data structure
                     data = {}
                     for indices in list(product(range(n), repeat=len(operator))):
                         op = tuple(
@@ -423,7 +431,7 @@ class BootstrapSystem:
                 """
                 if self.verbose:
                     debug(
-                        f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}"
+                        f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}, generator {symmetry_idx+1}/{len(self.symmetry_generators)}"
                     )
 
         return self.clean_constraints(constraints)
@@ -458,6 +466,15 @@ class BootstrapSystem:
                     f"Generating Hamiltonian constraints, operator {op_idx+1}/{len(self.operator_list)}"
                 )
 
+        # if the Hamiltonian has imaginary interactions, break into real and imaginary constraints
+        '''
+        if not self.hamiltonian.get_imag_part().is_zero():
+            debug("Hamiltonian has complex couplings, breaking Hamiltonian constraints into real and imaginary componenets.")
+            new_constraints = []
+            for constraint in constraints:
+                new_constraints.extend([constraint.get_real_part(), constraint.get_imag_part()])
+            constraints = new_constraints #overwrite
+        '''
         return self.clean_constraints(constraints)
 
     def generate_gauge_constraints(self) -> list[SingleTraceOperator]:

@@ -3,7 +3,9 @@ TODO
 - consider consolidating BFSS and ThreeMatrixModel
 - consider consolidating 2- and 3- Matrix Models
 '''
+import numpy as np
 from bmn.algebra import MatrixSystem, SingleTraceOperator, MatrixOperator
+
 
 class MatrixModel():
     def __init__(self, couplings):
@@ -372,53 +374,61 @@ class MiniBMN(MatrixModel):
 
     def build_matrix_system(self):
         self.matrix_system = MatrixSystem(
-            operator_basis=["X0", "X1", "X2", "P0", "P1", "P2"],
+            operator_basis=["X0", "X1", "X2", "Pi0", "Pi1", "Pi2"],
             commutation_rules_concise={
-                ("P0", "X0"): -1j,
-                ("P1", "X1"): -1j,
-                ("P2", "X2"): -1j,
+                ("Pi0", "X0"): 1,
+                ("Pi1", "X1"): 1,
+                ("Pi2", "X2"): 1,
                 },
-                hermitian_dict={"P0": True, "X0": True, "P1": True, "X1": True, "P2": True, "X2": True},
+                hermitian_dict={"Pi0": False, "X0": True, "Pi1": False, "X1": True, "Pi2": False, "X2": True},
                 )
 
     def build_gauge_generator(self):
         self.gauge_generator = MatrixOperator(
             data={
-                ("X0", "P0"): 1j,
-                ("P0", "X0"): -1j,
-                ("X1", "P1"): 1j,
-                ("P1", "X1"): -1j,
-                ("X2", "P2"): 1j,
-                ("P2", "X2"): -1j,
-                (): 3,}
+                ("X0", "Pi0"): 1,
+                ("Pi0", "X0"): -1,
+                ("X1", "Pi1"): 1,
+                ("Pi1", "X1"): -1,
+                ("X2", "Pi2"): 1,
+                ("Pi2", "X2"): -1,
+                (): 3,
+                }
                 )
 
     def build_hamiltonian(self):
         self.hamiltonian = SingleTraceOperator(
             data={
-                # kinetic terms
-                ("P0", "P0"): 0.5,
-                ("P1", "P1"): 0.5,
-                ("P2", "P2"): 0.5,
+                # kinetic term
+                ("Pi0", "Pi0"): -0.5,
+                ("Pi1", "Pi1"): -0.5,
+                ("Pi2", "Pi2"): -0.5,
                 # quadratic term
-                ("X0", "X0"): self.couplings["g2"] / 2,
-                ("X1", "X1"): self.couplings["g2"] / 2,
-                ("X2", "X2"): self.couplings["g2"] / 2,
+                ("X0", "X0"): self.couplings["nu"]**2 / 2,
+                ("X1", "X1"): self.couplings["nu"]**2 / 2,
+                ("X2", "X2"): self.couplings["nu"]**2 / 2,
+                # cubic term
+                ("X0", "X1", "X2"): 1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
+                ("X1", "X2", "X0"): 1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
+                ("X2", "X0", "X1"): 1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
+                ("X0", "X2", "X1"): -1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
+                ("X2", "X1", "X0"): -1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
+                ("X1", "X0", "X2"): -1j * self.couplings["nu"] * np.sqrt(self.couplings["lambda"]),
                 # quartic term (XY)
-                ("X0", "X1", "X0", "X1"): -self.couplings["g4"] / 4,
-                ("X1", "X0", "X1", "X0"): -self.couplings["g4"] / 4,
-                ("X0", "X1", "X1", "X0"): self.couplings["g4"] / 4,
-                ("X1", "X0", "X0", "X1"): self.couplings["g4"] / 4,
+                ("X0", "X1", "X0", "X1"): -self.couplings["lambda"] / 4,
+                ("X1", "X0", "X1", "X0"): -self.couplings["lambda"] / 4,
+                ("X0", "X1", "X1", "X0"): self.couplings["lambda"] / 4,
+                ("X1", "X0", "X0", "X1"): self.couplings["lambda"] / 4,
                 # quartic term (XZ)
-                ("X0", "X2", "X0", "X2"): -self.couplings["g4"] / 4,
-                ("X2", "X0", "X2", "X0"): -self.couplings["g4"] / 4,
-                ("X0", "X2", "X2", "X0"): self.couplings["g4"] / 4,
-                ("X2", "X0", "X0", "X2"): self.couplings["g4"] / 4,
+                ("X0", "X2", "X0", "X2"): -self.couplings["lambda"] / 4,
+                ("X2", "X0", "X2", "X0"): -self.couplings["lambda"] / 4,
+                ("X0", "X2", "X2", "X0"): self.couplings["lambda"] / 4,
+                ("X2", "X0", "X0", "X2"): self.couplings["lambda"] / 4,
                 # quartic term (YZ)
-                ("X1", "X2", "X1", "X2"): -self.couplings["g4"] / 4,
-                ("X2", "X1", "X2", "X1"): -self.couplings["g4"] / 4,
-                ("X1", "X2", "X2", "X1"): self.couplings["g4"] / 4,
-                ("X2", "X1", "X1", "X2"): self.couplings["g4"] / 4,
+                ("X1", "X2", "X1", "X2"): -self.couplings["lambda"] / 4,
+                ("X2", "X1", "X2", "X1"): -self.couplings["lambda"] / 4,
+                ("X1", "X2", "X2", "X1"): self.couplings["lambda"] / 4,
+                ("X2", "X1", "X1", "X2"): self.couplings["lambda"] / 4,
                 }
                 )
 
@@ -429,17 +439,32 @@ class MiniBMN(MatrixModel):
             "x_2": SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
             "neg_x_2": -SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
-            "p_2": SingleTraceOperator(data={("P0", "P0"): -1, ("P1", "P1"): -1, ("P2", "P2"): -1}),
-            "p_4": SingleTraceOperator(data={("P0", "P0", "P0", "P0"): 1, ("P1", "P1", "P1", "P1"): 1, ("P2", "P2", "P2", "P2"): 1}),
-        }
+            "neg_x_4": -SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
+            "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}),
+            "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1, ("Pi2", "Pi2", "Pi2", "Pi2"): 1}),
+            "neg_commutator_squared": SingleTraceOperator(data={
+                # quartic term (XY)
+                ("X0", "X1", "X0", "X1"): -1,
+                ("X1", "X0", "X1", "X0"): -1,
+                ("X0", "X1", "X1", "X0"): 1,
+                ("X1", "X0", "X0", "X1"): 1,
+                # quartic term (XZ)
+                ("X0", "X2", "X0", "X2"): -1,
+                ("X2", "X0", "X2", "X0"): -1,
+                ("X0", "X2", "X2", "X0"): 1,
+                ("X2", "X0", "X0", "X2"): 1,
+                # quartic term (YZ)
+                ("X1", "X2", "X1", "X2"): -1,
+                ("X2", "X1", "X2", "X1"): -1,
+                ("X1", "X2", "X2", "X1"): 1,
+                ("X2", "X1", "X1", "X2"): 1,
+                }
+            ),
+            }
 
     def build_symmetry_generators(self):
         self.symmetry_generators = [
-            SingleTraceOperator(data={("X1", "P2"): 1, ("X2", "P1"): -1}),
-            SingleTraceOperator(data={("X0", "P2"): 1, ("X2", "P0"): -1}),
-            SingleTraceOperator(data={("X0", "P1"): 1, ("X1", "P0"): -1}),
+            SingleTraceOperator(data={("X1", "Pi2"): 1, ("X2", "Pi1"): -1}),
+            SingleTraceOperator(data={("X0", "Pi2"): 1, ("X2", "Pi0"): -1}),
+            SingleTraceOperator(data={("X0", "Pi1"): 1, ("X1", "Pi0"): -1}),
             ]
-
-
-
-

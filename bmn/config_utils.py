@@ -84,7 +84,7 @@ def generate_optimization_configs_newton(
         "eps_infeas": eps_infeas,
         "radius": radius,
         "cvxpy_solver": cvxpy_solver,
-        "optimization_method": "newton_Axb",
+        "optimization_method": "newton",
         }
 
     return optimization_config_dict
@@ -332,8 +332,8 @@ def generate_configs_bfss(
 def generate_configs_bmn(
     config_filename,
     config_dir,
-    g2,
-    g4,
+    nu,
+    lambd,
     optimization_method,
     **kwargs):
 
@@ -358,8 +358,9 @@ def generate_configs_bmn(
     config_data = {
         "model": {
             "model name": "MiniBMN",
-            "bootstrap class": "BootstrapSystemComplex",
-            "couplings": {"g2": g2, "g4": g4},
+            #"bootstrap class": "BootstrapSystemComplex",
+            "bootstrap class": "BootstrapSystem",
+            "couplings": {"nu": nu, "lambda": lambd},
         },
         "bootstrap": bootstrap_config_dict,
         "optimizer": optimization_config_dict,
@@ -473,7 +474,7 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
     return result
 
 
-def run_all_configs(config_dir, parallel=False, max_workers=6):
+def run_all_configs(config_dir, parallel=False, max_workers=6, check_if_exists_already=True):
 
     config_filenames = os.listdir(f"configs/{config_dir}")
     config_filenames = [f[:-5] for f in config_filenames if '.yaml' in f]
@@ -481,7 +482,7 @@ def run_all_configs(config_dir, parallel=False, max_workers=6):
 
     if not parallel:
         for config_filename in config_filenames:
-            run_bootstrap_from_config(config_filename, config_dir)
+            run_bootstrap_from_config(config_filename, config_dir, check_if_exists_already=check_if_exists_already)
     else:
         with ProcessPoolExecutor(max_workers) as executor:
             futures = [executor.submit(run_bootstrap_from_config, config_filename, config_dir) for config_filename in config_filenames]

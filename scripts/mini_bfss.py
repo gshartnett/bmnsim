@@ -3,9 +3,9 @@ from bmn.config_utils import generate_configs_bfss, run_all_configs
 
 ## energy held fixed
 L = 3
-checkpoint_path = f"MiniBFSS_L_{L}_symmetric"
+checkpoint_path = f"MiniBFSS_L_{L}_symmetric_tmp"
 
-config_dir = f"MiniBFSSx_L_{L}_symmetric_energy_fixed"
+config_dir = f"MiniBFSS_L_{L}_symmetric_energy_fixed"
 #config_dir = f"MiniBFSSx_L_{L}_symmetric_energy_fixed_pytorch"
 
 for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:

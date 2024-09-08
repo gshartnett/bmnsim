@@ -3,22 +3,32 @@ from bmn.config_utils import generate_configs_bmn, run_all_configs
 
 # generate the config files
 L = 3
-dir_name = f"MiniBMN_L_{L}_symmetric"
+nu = 1
+lambd = 1
+config_dir = f"MiniBMN_L_{L}_symmetric_nu_{nu}_lamb_{lambd}"
+checkpoint_path = config_dir
+checkpoint_path += "_pytorch"
 
 generate_configs_bmn(
     config_filename=f"test",
-    config_dir=dir_name,
-    g2=1,
-    g4=1,
+    config_dir=config_dir,
+    nu=1,
+    lambd=1,
     max_degree_L=L,
     load_from_previously_computed=True,
-    checkpoint_path=dir_name,
+    checkpoint_path=config_dir,
     impose_symmetries=True,
-    simplify_quadratic=False,
+    odd_degree_vanish=False,
+    #optimization_method="newton",
+    optimization_method="pytorch",
+    lr=1e0,
+    init_scale=1e-2,
     )
 
 # execute
-run_all_configs(config_dir=f"MiniBMN_L_{L}_symmetric", parallel=False)
-
-# symmetries, fraction of operators, simplify_quadratic, load_From_previously_computed
-# expectation values are complex in general
+run_all_configs(
+    config_dir=config_dir,
+    parallel=False,
+    max_workers=3,
+    check_if_exists_already=False
+    )

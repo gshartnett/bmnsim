@@ -598,7 +598,7 @@ def solve_bootstrap_Ax_eq_b(
     # get the bootstrap constraints necessary for the optimization
     # linear constraints
     if bootstrap.linear_constraints is None:
-        _ = bootstrap.build_linear_constraints().tocsr()
+        _ = bootstrap.build_linear_constraints()#.tocsr()
 
     # quadratic constraints
     if bootstrap.quadratic_constraints_numerical is None:
