@@ -460,6 +460,8 @@ class MiniBMN(MatrixModel):
                 ("X2", "X1", "X1", "X2"): 1,
                 }
             ),
+            "x1x2x3": SingleTraceOperator(data={("X0", "X1", "X2"): 1}),
+            "p1p2p3": SingleTraceOperator(data={("Pi0", "Pi1", "Pi2"): 1j**3})
             }
 
     def build_symmetry_generators(self):

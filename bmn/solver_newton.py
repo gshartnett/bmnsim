@@ -472,10 +472,13 @@ def sdp_minimize_Ax_eq_b(
     #A = linear_inhomogeneous_eq[0]
     #b = linear_inhomogeneous_eq[1]
     A_null_space = get_null_space_dense(matrix=linear_inhomogeneous_eq[0].todense())
-    null_space_projector = A_null_space @ np.linalg.pinv(A_null_space)
+    #null_space_projector = A_null_space @ np.linalg.pinv(A_null_space)
 
     num_variables = A_null_space.shape[1]
     param_null = cp.Variable(num_variables)
+
+    print(f"null_space_projector.shape = {A_null_space.shape}, param_null.shape={param_null.shape}, param_particular.shape={param_particular.shape}")
+    print(f"int(np.sqrt(bootstrap_table_sparse.shape)) = {bootstrap_table_sparse.shape}")
 
     # build the constraints
     # 1. the PSD bootstrap constraint(s)

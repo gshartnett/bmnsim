@@ -60,6 +60,7 @@ class BootstrapSystem:
         self.odd_degree_vanish = odd_degree_vanish
         self.operator_list = self.generate_operators(2 * max_degree_L)
         self.operator_dict = {op: idx for idx, op in enumerate(self.operator_list)}
+        self.conversion_vec = np.asarray([1 if len(op) % 2 ==0 else 1j for op in self.operator_list])#.astype(np.complex128)
         if 2 * self.max_degree_L < self.hamiltonian.max_degree:
             raise ValueError("2 * max_degree_L must be >= max degree of Hamiltonian.")
         self.param_dim = len(self.operator_dict)
@@ -73,12 +74,10 @@ class BootstrapSystem:
         self.symmetry_generators = symmetry_generators
         self.checkpoint_path = checkpoint_path
         if self.checkpoint_path is not None:
-            #if not os.path.exists(self.checkpoint_path):
             os.makedirs(self.checkpoint_path, exist_ok=True)
         if symmetry_method not in ["complete", "lazy"]:
             raise ValueError(f"Symmetry method {symmetry_method} not recognized.")
         self.symmetry_method = symmetry_method
-        print(f"NOTE Remember to incorporate more general basis changes!")
         self.verbose = verbose
         self._validate()
 
@@ -101,25 +100,6 @@ class BootstrapSystem:
                     raise ValueError(
                         f"Invalid operator: constrains term {op_str} which is not in operator_basis."
                     )
-
-    def scale_param_to_enforce_normalization(self, param: np.ndarray) -> np.ndarray:
-        """
-        Rescale the parameter vector to enforce the normalization condition that <1> = 1.
-
-        Parameters
-        ----------
-        param : np.ndarray
-            The input param.
-
-        Returns
-        -------
-        np.ndarray
-            The rescaled param.
-        """
-        vec = self.single_trace_to_coefficient_vector(
-            SingleTraceOperator(data={(): 1}), return_null_basis=True
-        )
-        return param / vec.dot(param)
 
     def build_null_space_matrix(
         self, additional_constraints: Optional[list[SingleTraceOperator]] = None
@@ -267,9 +247,20 @@ class BootstrapSystem:
         for op, coeff in st_operator:
             idx = self.operator_dict[op]
             vec[idx] = coeff
+        vec = np.asarray(vec)
+
         if not return_null_basis:
-            return np.asarray(vec)
-        return np.asarray(vec) @ self.null_space_matrix
+            return vec
+
+        vec = (self.conversion_vec * vec)
+
+        if np.all(vec.imag==0):
+            return vec.real @ self.null_space_matrix
+        elif np.all(vec.real==0):
+            #return vec @ self.null_space_matrix
+            return vec.imag @ self.null_space_matrix
+        else:
+            raise ValueError("Vector should be purely real or purely imaginary.")
 
     def double_trace_to_coefficient_matrix(self, dt_operator: DoubleTraceOperator):
         # use large-N factorization <tr(O1)tr(O2)> = <tr(O1)><tr(O2)>
@@ -279,12 +270,21 @@ class BootstrapSystem:
         for (op1, op2), coeff in dt_operator:
             idx1, idx2 = self.operator_dict[op1], self.operator_dict[op2]
 
+            both_even = (len(op1) % 2 == 0) and (len(op2) % 2 == 0)
+            both_odd = (len(op1) % 2 == 1) and (len(op2) % 2 == 1)
+            #if not (both_even or both_odd):
+            #    raise ValueError(f"Warning, expected non-zero entries of double-trace matrix to be for even-even or odd-odd degree operators. op1={op1}, op2={op2}, coeff={coeff}")
+            if not both_odd:
+                sign = 1
+            else:
+                sign = -1
+
             # symmetrize
             index_value_dict[(idx1, idx2)] = (
-                index_value_dict.get((idx1, idx2), 0) + coeff / 2
+                index_value_dict.get((idx1, idx2), 0) + sign * coeff / 2
             )
             index_value_dict[(idx2, idx1)] = (
-                index_value_dict.get((idx2, idx1), 0) + coeff / 2
+                index_value_dict.get((idx2, idx1), 0) + sign * coeff / 2
             )
 
         mat = create_sparse_matrix_from_dict(
@@ -320,23 +320,26 @@ class BootstrapSystem:
             return []
 
         d = len(self.matrix_system.operator_basis) // 2
-        symmetry_constraint_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}.pkl"
+        total_constraints_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}.pkl"
 
         # if symmetry constraints exist, load them
-        if os.path.exists(symmetry_constraint_filepath):
-            with open(symmetry_constraint_filepath, "rb") as f:
+        if os.path.exists(total_constraints_filepath):
+            with open(total_constraints_filepath, "rb") as f:
                 constraints = pickle.load(f)
-            debug(f"Loaded symmetry constraints from file {symmetry_constraint_filepath}")
+            debug(f"Loaded symmetry constraints from file {total_constraints_filepath}")
 
         # otherwise, generate them
         else:
 
-            constraints = []
+            total_constraints = []
             counter = 0
             n = len(self.matrix_system.operator_basis) # here, n = 2 * dim
 
             # loop over symmetry generators M
             for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
+
+                constraints = []
+                constraint_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}_sym_idx_{symmetry_idx}.pkl"
 
                 # initialize a matrix M which will implement the linear action of the generator g
                 # M will obey [g, operators_vector] = M operators_vector
@@ -446,11 +449,18 @@ class BootstrapSystem:
                             f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}, generator {symmetry_idx+1}/{len(self.symmetry_generators)}"
                         )
 
-            # clean them
-            constraints = self.clean_constraints(constraints)
+                # clean them
+                constraints = self.clean_constraints(constraints)
+
+                # save them
+                with open(constraint_filepath, "wb") as f:
+                    pickle.dump(constraints, f)
+
+                # add to the total set of constraints
+                total_constraints.extend(constraints)
 
             # save them
-            with open(symmetry_constraint_filepath, "wb") as f:
+            with open(total_constraints_filepath, "wb") as f:
                 pickle.dump(constraints, f)
 
         return constraints
@@ -529,7 +539,10 @@ class BootstrapSystem:
         """
         Generate single trace constraints imposed by reality,
             <O^dagger> = <O>*
-            NOTE the current implementation assumes <O> is real, so that <O>* = <O>.
+
+            NOTE: The current implementation assumes that
+                - <O> is real for deg(O) even, so that <O>* = <O>.
+                - <O> is imaginary for deg(O) odd, so that <O>* = -<O>.
 
         Returns
         -------
@@ -544,7 +557,8 @@ class BootstrapSystem:
             )
 
             if len(st_operator - st_operator_dagger) > 0:
-                constraints.append(st_operator - st_operator_dagger)
+                sign = 1 if len(op) % 2 == 0 else -1
+                constraints.append(st_operator - sign * st_operator_dagger)
         return self.clean_constraints(constraints)
 
     def generate_cyclic_constraint(self, op: tuple):
@@ -743,8 +757,20 @@ class BootstrapSystem:
         # build the index-value dict
         index_value_dict = {}
         for idx_constraint, st_operator in enumerate(self.linear_constraints):
-            for op_str, coeff in st_operator:
-                index_value_dict[(idx_constraint, self.operator_dict[op_str])] = coeff
+            vec = self.conversion_vec * self.single_trace_to_coefficient_vector(st_operator=st_operator)
+
+            # vec is purely real
+            if np.all(vec.imag==0):
+                for op_str, coeff in st_operator:
+                    idx_operator = self.operator_dict[op_str]
+                    index_value_dict[(idx_constraint, self.operator_dict[op_str])] = np.real(vec[idx_operator])
+            # vec is purely imag
+            elif np.all(vec.real==0):
+                for op_str, coeff in st_operator:
+                    idx_operator = self.operator_dict[op_str]
+                    index_value_dict[(idx_constraint, self.operator_dict[op_str])] = np.imag(vec[idx_operator])
+            else:
+                raise ValueError("Error, coefficient vector not purely real or purely imaginary.")
 
         # return the constraint matrix
         return create_sparse_matrix_from_dict(
@@ -805,18 +831,22 @@ class BootstrapSystem:
                 debug(
                     f"Generating quadratic constraints, operator {constraint_idx+1}/{len(quadratic_constraints)}"
                 )
-            debug(f"Memory usage: {psutil.Process().memory_info().rss / 1024 ** 2}")
+            #debug(f"Memory usage: {psutil.Process().memory_info().rss / 1024 ** 2}")
 
             lhs = constraint["lhs"]
             rhs = constraint["rhs"]
 
             # initialize the quadratic constraint matrix
-            linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
+            #linear_constraint_vector = self.single_trace_to_coefficient_vector(lhs)
+            linear_constraint_vector = self.single_trace_to_coefficient_vector(
+                st_operator=lhs,
+                return_null_basis=True
+                )
             quadratic_matrix = self.double_trace_to_coefficient_matrix(rhs)
 
             # transform to null basis
             # the minus sign is very important: (-RHS + LHS = 0)
-            linear_constraint_vector = linear_constraint_vector @ null_space_matrix
+            #linear_constraint_vector = linear_constraint_vector @ null_space_matrix
             quadratic_matrix = (
                 -null_space_matrix.T @ quadratic_matrix @ null_space_matrix
             )
@@ -967,7 +997,7 @@ class BootstrapSystem:
         print("Building the bootstrap table...")
         if self.null_space_matrix is None:
             raise ValueError("Error, null space matrix has not yet been built.")
-        null_space_matrix = self.null_space_matrix
+        #null_space_matrix = self.null_space_matrix
 
         bootstrap_dict = {}
         for idx1, op_str1 in enumerate(self.bootstrap_basis_list):
@@ -979,9 +1009,13 @@ class BootstrapSystem:
                     [not self.matrix_system.hermitian_dict[term] for term in op_str1]
                 )
                 sign = (-1) ** num_antihermitian_ops
+
+                degree = len(op_str1 + op_str2)
+                i_factor = 1 if (degree % 2 == 0) else 1j
+
                 index_map = self.operator_dict[op_str1 + op_str2]
-                for k in range(null_space_matrix.shape[1]):
-                    x = sign * null_space_matrix[index_map, k]
+                for k in range(self.null_space_matrix.shape[1]):
+                    x = sign * i_factor * self.null_space_matrix[index_map, k]
                     if np.abs(x) > self.tol:
                         # print(f"op1 = {op_str1[::-1]}, op2 = {op_str2}, op1* + op2 = {op_str1 + op_str2}, index = {index_map}, k = {k}, val={x}")
                         bootstrap_dict[(idx1, idx2, k)] = x
@@ -989,7 +1023,8 @@ class BootstrapSystem:
         # map to a sparse array
         bootstrap_array = np.zeros(
             (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null),
-            dtype=np.float64,
+            dtype=np.complex128,
+            #dtype=np.float64,
         )
         for (i, j, k), value in bootstrap_dict.items():
             bootstrap_array[i, j, k] = value

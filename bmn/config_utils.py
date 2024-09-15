@@ -50,6 +50,7 @@ optimization_keys_pytorch=[
     "gamma",
     "num_epochs",
     "penalty_reg",
+    "patience",
     ]
 
 def generate_optimization_configs_newton(
@@ -84,7 +85,7 @@ def generate_optimization_configs_newton(
         "eps_infeas": eps_infeas,
         "radius": radius,
         "cvxpy_solver": cvxpy_solver,
-        "optimization_method": "newton",
+        "optimization_method": "newton_Axb",
         }
 
     return optimization_config_dict
@@ -337,19 +338,19 @@ def generate_configs_bmn(
     optimization_method,
     **kwargs):
 
-    if not optimization_method in ["newton", "pytorch"]:
+    if not optimization_method in ["newton", "pytorch", "newton_Axb"]:
         raise ValueError(f"optimization method {optimization_method} not recognized.")
 
     # split the kwargs into separate bootstrap and optimization kwargs
     kwargs_bootstrap = {key: kwargs[key] for key in bootstrap_keys if key in kwargs}
-    if optimization_method == "newton":
+    if optimization_method == "newton" or optimization_method == "newton_Axb":
         kwargs_optimization = {key: kwargs[key] for key in optimization_keys_newton if key in kwargs}
     elif optimization_method == "pytorch":
         kwargs_optimization = {key: kwargs[key] for key in optimization_keys_pytorch if key in kwargs}
 
     # build the bootstrap and optimization configs
     bootstrap_config_dict = generate_bootstrap_configs(**kwargs_bootstrap)
-    if optimization_method == "newton":
+    if optimization_method == "newton" or optimization_method == "newton_Axb":
         optimization_config_dict = generate_optimization_configs_newton(**kwargs_optimization)
     elif optimization_method == "pytorch":
         optimization_config_dict = generate_optimization_configs_pytorch(**kwargs_optimization)
