@@ -1,3 +1,4 @@
+import fire
 import numpy as np
 from scipy.integrate import trapezoid as trapz
 from scipy.optimize import minimize
@@ -138,11 +139,11 @@ class BornOppenheimer:
         """
 
         # bounds for rho (rho >= 0)
-        bounds = [(0, None)] * n_points  # rho(x) >= 0 for all x
+        bounds = [(0, None)] * len(x_grid)  # rho(x) >= 0 for all x
 
         # initial guess for rho (e.g., uniform distribution)
         x_min, x_max = x_grid[0], x_grid[-1]
-        initial_rho = np.ones(n_points) * 1 / (x_max - x_min)
+        initial_rho = np.ones_like(x_grid) * 1 / (x_max - x_min)
 
         # Minimize the energy functional E_BO with the normalization constraint
         result = minimize(
@@ -160,19 +161,19 @@ class BornOppenheimer:
         return result
 
 
-if __name__ == "__main__":
-
+def main(m: float=1, g: float=1, npoints: int=250):
     # set-up the BO model
-    m, g = 0, 1
     born_oppenheimer = BornOppenheimer(m=m, g=g)
 
     # define the x grid
     x_min, x_max = -3, 3
-    n_points = 250
-    x_grid = np.linspace(x_min, x_max, n_points)
+    x_grid = np.linspace(x_min, x_max, npoints)
 
     # solve and print the result
     result = born_oppenheimer.solve(x_grid=x_grid)
-    optimal_rho = result.x
     optimal_energy = result.fun
+
     print(f"Minimum BO energy for m={m}, g={g}: E={optimal_energy:.4f}")
+
+if __name__ == "__main__":
+    fire.Fire(main)

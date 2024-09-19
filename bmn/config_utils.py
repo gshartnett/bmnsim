@@ -8,9 +8,8 @@ from bmn.algebra import SingleTraceOperator
 from bmn.bootstrap import BootstrapSystem
 from bmn.bootstrap_complex import BootstrapSystemComplex
 from bmn.models import OneMatrix, TwoMatrix, MiniBFSS, ThreeMatrix, MiniBMN
-from bmn.solver_newton import solve_bootstrap as solve_bootstrap_newton, solve_bootstrap_Ax_eq_b
+from bmn.solver_newton import solve_bootstrap as solve_bootstrap_newton
 from bmn.solver_pytorch import solve_bootstrap as solve_bootstrap_pytorch
-#from bmn.solver_trustregion import solve_bootstrap as solve_bootstrap_trust_region
 
 
 bootstrap_keys = [
