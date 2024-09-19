@@ -103,18 +103,29 @@ def sdp_minimize(
 
     # initialize the cvxpy parameter vector in the null space
     num_variables = init.size
+    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
     param = cp.Variable(num_variables)
 
-    # build the constraints
-    # 1. the PSD bootstrap constraint(s)
-    # 2. A @ param == 0
-    # 3. ||param - init||_2 <= radius
-    size = int(np.sqrt(bootstrap_table_sparse.shape[0]))
-    constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
-    constraints += [linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]]
-    constraints += [cp.norm(param - init) <= radius]
+    if np.max(np.abs(bootstrap_table_sparse.imag)) > 1e-10:
+        debug("mapping complex bootstrap matrix to real")
+        bootstrap_table_sparse_real = bootstrap_table_sparse.real
+        bootstrap_table_sparse_imag = bootstrap_table_sparse.imag
+        matrix_real = cp.reshape(bootstrap_table_sparse_real @ param, (size, size))
+        matrix_imag = cp.reshape(bootstrap_table_sparse_imag @ param, (size, size))
+        matrix_block = cp.bmat([[matrix_real, -matrix_imag], [matrix_imag, matrix_real]])
+        constraints = [matrix_block >> 0]
+        constraints += [linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]]
+        constraints += [cp.norm(param - init) <= radius]
+    else:
+        # build the constraints
+        # 1. the PSD bootstrap constraint(s)
+        # 2. A @ param == 0
+        # 3. ||param - init||_2 <= radius
+        constraints = [cp.reshape(bootstrap_table_sparse @ param, (size, size)) >> 0]
+        constraints += [linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]]
+        constraints += [cp.norm(param - init) <= radius]
 
-    # the 1ss to minimize
+    # the loss to minimize
     loss = linear_objective_vector @ param
     if linear_inhomogeneous_penalty is not None:
         penalty = cp.norm(

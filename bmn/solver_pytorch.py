@@ -19,6 +19,7 @@ from bmn.linear_algebra import get_null_space_dense
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 #device = torch.device("cpu")
+torch_dtype = torch.complex128
 
 
 def solve_bootstrap(
@@ -75,34 +76,46 @@ def solve_bootstrap(
     null_space_projector = A_null_space @ np.linalg.pinv(A_null_space)
 
     # convert to torch tensor
-    A = torch.from_numpy(A).type(torch.float).to(device)
-    b = torch.from_numpy(b).type(torch.float).to(device)
-    null_space_projector = torch.from_numpy(null_space_projector).type(torch.float).to(device)
+    A = torch.from_numpy(A).type(torch_dtype).to(device)
+    b = torch.from_numpy(b).type(torch_dtype).to(device)
+    null_space_projector = torch.from_numpy(null_space_projector).type(torch_dtype).to(device)
 
     # get the vector of the operator to bound (minimize)
     vec = bootstrap.single_trace_to_coefficient_vector(
         st_operator_to_minimize, return_null_basis=True
     )
     #vec = bootstrap.conversion_vec * vec
-    vec = torch.from_numpy(vec).type(torch.float).to(device)
+    vec = torch.from_numpy(vec).type(torch_dtype).to(device)
 
     # build the bootstrap array
     bootstrap_array_torch = (
-        torch.from_numpy(bootstrap.bootstrap_table_sparse.todense())
-        .type(torch.float)
-        .to(device)
+        torch.from_numpy(bootstrap.bootstrap_table_sparse.todense()).real
+        #.type(torch.complex)
+        #.to(device)
     )
+
+    # cast to real if possible
+    #if torch.max(torch.abs(bootstrap_array_torch.imag)) < 1e-10:
+    #    print(f"Casting bootstrap array to real")
+    #    bootstrap_array_torch = bootstrap_array_torch.real
+    print(f"Bootstrap table dtype: {bootstrap_array_torch.dtype}")
+
+    bootstrap_array_torch = bootstrap_array_torch.type(torch.float64)
+    bootstrap_array_torch = bootstrap_array_torch.type(torch.complex128)
+    debug(f"DROPPING THE IMAGINARY PART OF BOOTSTRAP MATRIX")
+
+    bootstrap_array_torch = bootstrap_array_torch.to(device)
 
     # build the constraints
     quadratic_constraints = bootstrap.quadratic_constraints_numerical
     quadratic_constraint_linear = (
         torch.from_numpy(quadratic_constraints["linear"].todense())
-        .type(torch.float)
+        .type(torch_dtype)
         .to(device)
     )
     quadratic_constraint_quadratic = (
         torch.from_numpy(quadratic_constraints["quadratic"].todense())
-        .type(torch.float)
+        .type(torch_dtype)
         .to(device)
     )
     quadratic_constraint_quadratic = quadratic_constraint_quadratic.reshape(
@@ -118,7 +131,10 @@ def solve_bootstrap(
 
     def operator_loss(param_null, param_particular):
         param = get_full_param(param_null, param_particular)
-        return vec @ param
+        expectation_value = vec @ param
+        print(expectation_value)
+        return expectation_value
+        #return torch.real(vec @ param)
 
     def get_quadratic_constraint_vector(param):
         quadratic_constraints = torch.einsum(
@@ -144,6 +160,7 @@ def solve_bootstrap(
             (bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim)
         )
         smallest_eigv = torch.linalg.eigvalsh(bootstrap_matrix)[0]
+        smallest_eigv = torch.real(smallest_eigv)
         return ReLU()(-smallest_eigv)
 
     def build_loss(param_null, param_particular, penalty_reg=penalty_reg):
@@ -166,11 +183,11 @@ def solve_bootstrap(
         param_null = init
         debug(f"Initializing as param={init}")
 
-    param_null = torch.tensor(param_null).type(torch.float).to(device)
+    param_null = torch.tensor(param_null).type(torch_dtype).to(device)
     param_null = null_space_projector @ param_null
 
     param_null.requires_grad = True
-    param_particular = torch.tensor(param_particular).type(torch.float).to(device)
+    param_particular = torch.tensor(param_particular).type(torch_dtype).to(device)
 
     print(f"Axb_loss={Axb_loss(param_null=param_null, param_particular=param_particular)}")
     print(f"A @ param = {A @ (null_space_projector @ param_null + param_particular)}")

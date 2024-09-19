@@ -85,7 +85,7 @@ def generate_optimization_configs_newton(
         "eps_infeas": eps_infeas,
         "radius": radius,
         "cvxpy_solver": cvxpy_solver,
-        "optimization_method": "newton_Axb",
+        "optimization_method": "newton",
         }
 
     return optimization_config_dict
