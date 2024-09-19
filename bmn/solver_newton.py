@@ -4,7 +4,7 @@ import cvxpy as cp
 import numpy as np
 import scipy.sparse as sparse
 from scipy.sparse import csr_matrix
-
+from scipy.linalg import ishermitian
 from bmn.algebra import SingleTraceOperator
 from bmn.bootstrap import BootstrapSystem
 from bmn.debug_utils import debug
@@ -228,13 +228,6 @@ def solve_bootstrap(
         np.random.seed(PRNG_seed)
         debug(f"setting PRNG seed to {PRNG_seed}")
 
-    # print(f"tol={tol:.4e}")
-    # assert 1==0
-
-    # reg_min = 1e4
-    # reg_max = 1e7
-    # reg_schedule = np.exp(np.linspace(np.log(reg_min), np.log(reg_max), maxiters))
-
     # get the bootstrap constraints necessary for the optimization
     # linear constraints
     if bootstrap.linear_constraints is None:
@@ -249,6 +242,13 @@ def solve_bootstrap(
     if bootstrap.bootstrap_table_sparse is None:
         bootstrap.build_bootstrap_table()
     bootstrap_table_sparse = bootstrap.bootstrap_table_sparse
+
+    # confirm bootstrap table is consistent with hermitian bootstrap matrix
+    debug(f"Boostrap matrix dtype: {bootstrap_table_sparse.dtype}")
+    bootstrap_matrix_tmp = bootstrap_table_sparse @ np.random.normal(size=bootstrap.param_dim_null)
+    bootstrap_matrix_tmp = bootstrap_matrix_tmp.reshape((bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim))
+    if not ishermitian(bootstrap_matrix_tmp, atol=1e-12):
+        raise ValueError("Error, bootstrap matrix is not Hermitian.")
 
     debug(f"Final bootstrap parameter dimension: {bootstrap.param_dim_null}")
     # initialize the variable vector
