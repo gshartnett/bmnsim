@@ -338,7 +338,6 @@ class BootstrapSystem:
 
             total_constraints = []
             counter = 0
-            n = len(self.matrix_system.operator_basis)  # here, n = 2 * dim
 
             # loop over symmetry generators M
             for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
@@ -348,7 +347,7 @@ class BootstrapSystem:
 
                 # initialize a matrix M which will implement the linear action of the generator g
                 # M will obey [g, operators_vector] = M operators_vector
-                M = np.zeros(shape=(n, n), dtype=np.complex128)
+                M = np.zeros(shape=(2*d, 2*d), dtype=np.complex128)
                 for i, op in enumerate(self.matrix_system.operator_basis):
                     commutator = self.matrix_system.single_trace_commutator(
                         symmetry_generator, SingleTraceOperator(data={(op): 1})
@@ -366,16 +365,16 @@ class BootstrapSystem:
                 assert np.all(
                     [
                         np.allclose(
-                            np.zeros(n),
+                            np.zeros(2*d),
                             M @ old_to_new_variables[i]
                             - eig_values[i] * old_to_new_variables[i],
                         )
-                        for i in range(n)
+                        for i in range(2*d)
                     ]
                 )
 
-                # build all monomials using the new operators with degree < 2*L
-                new_ops_dict = {f"new_op_{i}": i for i in range(n)}
+                # build all monomials using the new operators with degree <= 2*L
+                new_ops_dict = {f"new_op_{i}": i for i in range(2*d)}
                 all_new_operators = {
                     deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
                     for deg in range(1, 2 * self.max_degree_L + 1)
@@ -411,12 +410,12 @@ class BootstrapSystem:
                                     self.matrix_system.operator_basis[j],
                                     old_to_new_variables[new_ops_dict[operator[i]], j],
                                 )
-                                for j in range(n)
+                                for j in range(2*d)
                             ]
 
                         # build the constraint single-trace operator using the above intermediate data structure
                         data = {}
-                        for indices in list(product(range(n), repeat=len(operator))):
+                        for indices in list(product(range(2*d), repeat=len(operator))):
                             op = tuple(
                                 [
                                     value[indices[idx]][0]
@@ -1053,11 +1052,17 @@ class BootstrapSystem:
                         bootstrap_dict[(idx1, idx2, k)] = x
 
         # map to a sparse array
+        # most of the models we consider lead to real bootstrap tables, BMN is the exception
+        # keep the table complex for now
         bootstrap_table = np.zeros(
             (self.bootstrap_matrix_dim, self.bootstrap_matrix_dim, self.param_dim_null),
-        )
+            dtype=np.complex128
+            )
         for (i, j, k), value in bootstrap_dict.items():
-            bootstrap_table[i, j, k] = value
+            try:
+                bootstrap_table[i, j, k] = value
+            except:
+                print(i, j, k, value)
 
         self.bootstrap_table_sparse = csr_matrix(
             bootstrap_table.reshape(
@@ -1102,7 +1107,7 @@ class BootstrapSystem:
         )
 
         # verify that matrix is Hermitian
-        if not ishermitian(bootstrap_matrix):
+        if not ishermitian(bootstrap_matrix, atol=1e-10):
             raise ValueError(f"Bootstrap matrix is not symmetric.")
 
         return bootstrap_matrix

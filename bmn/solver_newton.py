@@ -95,8 +95,10 @@ def sdp_minimize(
     # 1. the PSD bootstrap constraint(s)
     # 2. A @ param == 0
     # 3. ||param||_2 <= radius
+
+    # if the n x n bootstrap matrix is complex, split it up into a 2n x 2n real matrix
     if np.max(np.abs(bootstrap_table_sparse.imag)) > 1e-10:
-        debug("mapping complex bootstrap matrix to real")
+        debug("Mapping complex bootstrap matrix to real")
         bootstrap_table_sparse_real = bootstrap_table_sparse.real
         bootstrap_table_sparse_imag = bootstrap_table_sparse.imag
         matrix_real = cp.reshape(bootstrap_table_sparse_real @ param, (matrix_dim, matrix_dim))
@@ -148,7 +150,7 @@ def sdp_minimize(
         (bootstrap_table_sparse @ param.value).reshape(matrix_dim, matrix_dim)
     )[0]
     debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
-    debug(f"sdp_minimize ||x||: {ball_constraint:.4e}")
+    #debug(f"sdp_minimize ||x||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
     debug(
         f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}"
@@ -395,7 +397,7 @@ def solve_bootstrap(
 
         # terminate early if the tolerance is satisfied
         # if penalty_reg * quad_constraint_violation_norm < tol:
-        if max_quad_constraint_violation < tol:
+        if step > 4 and max_quad_constraint_violation < tol:
             return param, optimization_result
 
         # decay the regularization parameter

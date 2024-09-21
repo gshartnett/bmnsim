@@ -7,16 +7,15 @@ Kearsley, Elliot A., and Jeffrey T. Fong. "Linearly independent sets of isotropi
 J. Res. Natl. Bur. Stand., Sect. B 79 (1975): 49.
 """
 
-import pickle
 from sparseqr import qr
 from bmn.linear_algebra import create_sparse_matrix_from_dict
 from bmn.bootstrap import BootstrapSystem
-from bmn.models import MiniBFSS
+from bmn.models import MiniBMN
 
 d = 3
-L = 3
-model = MiniBFSS(couplings={"lambda": 1})
-checkpoint_path = f"checkpoints/MiniBFSS_L_{L}_symmetric"
+L = 2
+model = MiniBMN(couplings={"nu": 1, "lambda": 1})
+checkpoint_path = f"checkpoints/MiniBMN_L_{L}_symmetric"
 
 bootstrap = BootstrapSystem(
     matrix_system=model.matrix_system,
@@ -29,15 +28,8 @@ bootstrap = BootstrapSystem(
     )
 
 # build the symmetries
-#symmetry_constrained = bootstrap.generate_symmetry_constraints()
-#symmetry_constrained_cleaned = bootstrap.clean_constraints(symmetry_constrained)
-#with open("data/tmp/BFSS_L_3_linear_constraints_data.pkl", "wb") as f:
-#    pickle.dump(symmetry_constrained_cleaned, f)
-
-
-# load the symmetries
-with open("data/tmp/BFSS_L_3_linear_constraints_data.pkl", "rb") as f:
-    symmetry_constrained_cleaned = pickle.load(f)
+symmetry_constrained = bootstrap.generate_symmetry_constraints()
+symmetry_constrained_cleaned = bootstrap.clean_constraints(symmetry_constrained)
 
 # number of independent isotropic tensors by rank
 num_isotropic_tensors_of_rank_n = {
@@ -52,7 +44,7 @@ num_isotropic_tensors_of_rank_n = {
 }
 
 # loop over ranks
-for total_rank in [2, 3, 4, 5, 6]:
+for total_rank in range(2, 2*L+1):
 
     # get subset of constraints for a given rank
     symmetry_constraints_by_rank = [op for op in symmetry_constrained_cleaned if op.max_degree == total_rank]
