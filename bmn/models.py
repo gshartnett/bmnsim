@@ -241,12 +241,15 @@ class ThreeMatrix(MatrixModel):
 
 
 class MiniBFSS(ThreeMatrix):
-    def __init__(self, lambd):
+    def __init__(self, couplings):
+        lambd = couplings["lambda"]
         super().__init__({"g2": 0, "g3": 0, "g4": lambd})
 
 
-class MiniBMN_(ThreeMatrix):
-    def __init__(self, nu, lambd):
+class MiniBMN(ThreeMatrix):
+    def __init__(self, couplings):
+        nu = couplings["nu"]
+        lambd = couplings["lambda"]
         super().__init__({"g2": nu**2, "g3": 3 * nu * np.sqrt(lambd), "g4": lambd})
 
 
