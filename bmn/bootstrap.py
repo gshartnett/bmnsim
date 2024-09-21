@@ -329,8 +329,9 @@ class BootstrapSystem:
         # if symmetry constraints exist, load them
         if os.path.exists(total_constraints_filepath):
             with open(total_constraints_filepath, "rb") as f:
-                constraints = pickle.load(f)
+                total_constraints = pickle.load(f)
             debug(f"Loaded symmetry constraints from file {total_constraints_filepath}")
+            return total_constraints
 
         # otherwise, generate them
         else:
