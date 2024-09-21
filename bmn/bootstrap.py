@@ -323,8 +323,7 @@ class BootstrapSystem:
         if self.symmetry_generators is None:
             return []
 
-        # save path
-        d = len(self.matrix_system.operator_basis) // 2  # dimension
+        d = len(self.matrix_system.operator_basis) // 2
         total_constraints_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}.pkl"
 
         # if symmetry constraints exist, load them
@@ -335,19 +334,18 @@ class BootstrapSystem:
 
         # otherwise, generate them
         else:
-
-            total_constraints = []
-            counter = 0
+            total_constraints = [] # all constraints
+            n = len(self.matrix_system.operator_basis)
 
             # loop over symmetry generators M
             for symmetry_idx, symmetry_generator in enumerate(self.symmetry_generators):
 
-                constraints = []
+                constraints = [] # constraints for current generator
                 constraint_filepath = f"checkpoints/rotational_symmetry_constraints/dim_{d}_L_{self.max_degree_L}_sym_idx_{symmetry_idx}.pkl"
 
                 # initialize a matrix M which will implement the linear action of the generator g
                 # M will obey [g, operators_vector] = M operators_vector
-                M = np.zeros(shape=(2*d, 2*d), dtype=np.complex128)
+                M = np.zeros(shape=(n, n), dtype=np.complex128)
                 for i, op in enumerate(self.matrix_system.operator_basis):
                     commutator = self.matrix_system.single_trace_commutator(
                         symmetry_generator, SingleTraceOperator(data={(op): 1})
@@ -365,16 +363,16 @@ class BootstrapSystem:
                 assert np.all(
                     [
                         np.allclose(
-                            np.zeros(2*d),
+                            np.zeros(n),
                             M @ old_to_new_variables[i]
                             - eig_values[i] * old_to_new_variables[i],
                         )
-                        for i in range(2*d)
+                        for i in range(n)
                     ]
                 )
 
-                # build all monomials using the new operators with degree <= 2*L
-                new_ops_dict = {f"new_op_{i}": i for i in range(2*d)}
+                # build all monomials using the new operators with degree < 2*L
+                new_ops_dict = {f"new_op_{i}": i for i in range(n)}
                 all_new_operators = {
                     deg: [x for x in product(new_ops_dict.keys(), repeat=deg)]
                     for deg in range(1, 2 * self.max_degree_L + 1)
@@ -385,37 +383,20 @@ class BootstrapSystem:
 
                 # loop over all operators in the eigenbasis
                 for idx, operator in enumerate(all_new_operators):
-                    counter += 1
 
                     # compute the charge under the symmetry
-                    charge = sum(
-                        [eig_values[new_ops_dict[basis_op]] for basis_op in operator]
-                    )
+                    charge = sum([eig_values[new_ops_dict[basis_op]] for basis_op in operator])
 
                     # if the charge is not zero, the resulting operator expectation value must vanish in a symmetric state
                     if np.abs(charge) > tol:
 
-                        # intermediate data structure used to transform operator in eigen-basis to the original basis
-                        # operator2 = {
-                        #   0: ("X0", a0), ("X1", a1), ..., ("Pi0", b0), ("Pi1", b1), ...
-                        #   1: ("X0", c0), ("X1", c1), ..., ("Pi0", d0), ("Pi1", d1), ...
-                        #   ...
-                        # }
-                        # which means that the constraint operator is
-                        # (a0 "X0" + ... + b0 "Pi0") x (c0 "X0" + ... d0 "Pi0" + ...) x ...
                         operator2 = {}
                         for i in range(len(operator)):
-                            operator2[i] = [
-                                (
-                                    self.matrix_system.operator_basis[j],
-                                    old_to_new_variables[new_ops_dict[operator[i]], j],
-                                )
-                                for j in range(2*d)
-                            ]
+                            operator2[i] = [(self.matrix_system.operator_basis[j], old_to_new_variables[new_ops_dict[operator[i]], j],) for j in range(n)]
 
-                        # build the constraint single-trace operator using the above intermediate data structure
+                        # build the constraint single-trace operator
                         data = {}
-                        for indices in list(product(range(2*d), repeat=len(operator))):
+                        for indices in list(product(range(n), repeat=len(operator))):
                             op = tuple(
                                 [
                                     value[indices[idx]][0]
@@ -441,7 +422,7 @@ class BootstrapSystem:
 
                     if self.verbose:
                         debug(
-                            f"Generating symmetry constraints, operator {counter}/{len(all_new_operators) * len(self.symmetry_generators)}, generator {symmetry_idx+1}/{len(self.symmetry_generators)}"
+                            f"Generating symmetry constraints, operator {idx+1}/{len(all_new_operators) * len(self.symmetry_generators)}"
                         )
 
                 # clean them
@@ -456,9 +437,9 @@ class BootstrapSystem:
 
             # save them
             with open(total_constraints_filepath, "wb") as f:
-                pickle.dump(constraints, f)
+                pickle.dump(total_constraints, f)
 
-        return constraints
+        return self.clean_constraints(total_constraints)
 
     def generate_hamiltonian_constraints(self) -> list[SingleTraceOperator]:
         """
