@@ -175,6 +175,13 @@ class ThreeMatrix(MatrixModel):
                 ("X0", "X0"): self.couplings["g2"] / 2,
                 ("X1", "X1"): self.couplings["g2"] / 2,
                 ("X2", "X2"): self.couplings["g2"] / 2,
+                # cubic term
+                ("X0", "X1", "X2"): 1j * self.couplings["g3"] / 3,
+                ("X1", "X2", "X0"): 1j * self.couplings["g3"] / 3,
+                ("X2", "X0", "X1"): 1j * self.couplings["g3"] / 3,
+                ("X0", "X2", "X1"): -1j * self.couplings["g3"] / 3,
+                ("X2", "X1", "X0"): -1j * self.couplings["g3"] / 3,
+                ("X1", "X0", "X2"): -1j * self.couplings["g3"] / 3,
                 # quartic term (XY)
                 ("X0", "X1", "X0", "X1"): -self.couplings["g4"] / 4,
                 ("X1", "X0", "X1", "X0"): -self.couplings["g4"] / 4,
@@ -200,6 +207,7 @@ class ThreeMatrix(MatrixModel):
             "x_2": SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
             "neg_x_2": -SingleTraceOperator(data={("X0", "X0"): 1, ("X1", "X1"): 1, ("X2", "X2"): 1}),
             "x_4": SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
+            "neg_x_4": -SingleTraceOperator(data={("X0", "X0", "X0", "X0"): 1, ("X1", "X1", "X1", "X1"): 1, ("X2", "X2", "X2", "X2"): 1}),
             "p_2": SingleTraceOperator(data={("Pi0", "Pi0"): -1, ("Pi1", "Pi1"): -1, ("Pi2", "Pi2"): -1}),
             "p_4": SingleTraceOperator(data={("Pi0", "Pi0", "Pi0", "Pi0"): 1, ("Pi1", "Pi1", "Pi1", "Pi1"): 1, ("Pi2", "Pi2", "Pi2", "Pi2"): 1}),
             "neg_commutator_squared": SingleTraceOperator(data={
@@ -220,31 +228,8 @@ class ThreeMatrix(MatrixModel):
                 ("X2", "X1", "X1", "X2"): 1,
                 }
             ),
-            "lagrangian": SingleTraceOperator(data={
-                ("Pi0", "Pi0"): -0.5,
-                ("Pi1", "Pi1"): -0.5,
-                ("Pi2", "Pi2"): -0.5,
-                # mass term
-                ("X0", "X0"): -self.couplings["g2"] / 2,
-                ("X1", "X1"): -self.couplings["g2"] / 2,
-                ("X2", "X2"): -self.couplings["g2"] / 2,
-                # quartic term (XY)
-                ("X0", "X1", "X0", "X1"): self.couplings["g4"] / 4,
-                ("X1", "X0", "X1", "X0"): self.couplings["g4"] / 4,
-                ("X0", "X1", "X1", "X0"): -self.couplings["g4"] / 4,
-                ("X1", "X0", "X0", "X1"): -self.couplings["g4"] / 4,
-                # quartic term (XZ)
-                ("X0", "X2", "X0", "X2"): self.couplings["g4"] / 4,
-                ("X2", "X0", "X2", "X0"): self.couplings["g4"] / 4,
-                ("X0", "X2", "X2", "X0"): -self.couplings["g4"] / 4,
-                ("X2", "X0", "X0", "X2"): -self.couplings["g4"] / 4,
-                # quartic term (YZ)
-                ("X1", "X2", "X1", "X2"): self.couplings["g4"] / 4,
-                ("X2", "X1", "X2", "X1"): self.couplings["g4"] / 4,
-                ("X1", "X2", "X2", "X1"): -self.couplings["g4"] / 4,
-                ("X2", "X1", "X1", "X2"): -self.couplings["g4"] / 4,
-                }
-                )
+            "x1x2x3": SingleTraceOperator(data={("X0", "X1", "X2"): 1}),
+            "p1p2p3": SingleTraceOperator(data={("Pi0", "Pi1", "Pi2"): 1j**3})
             }
 
     def build_symmetry_generators(self):
@@ -255,7 +240,17 @@ class ThreeMatrix(MatrixModel):
             ]
 
 
-class MiniBFSS(MatrixModel):
+class MiniBFSS(ThreeMatrix):
+    def __init__(self, lambd):
+        super().__init__({"g2": 0, "g3": 0, "g4": lambd})
+
+
+class MiniBMN_(ThreeMatrix):
+    def __init__(self, nu, lambd):
+        super().__init__({"g2": nu**2, "g3": 3 * nu * np.sqrt(lambd), "g4": lambd})
+
+
+class MiniBFSS_old(MatrixModel):
     def __init__(self, couplings):
         super().__init__(couplings)
         self.build_symmetry_generators()
@@ -367,7 +362,7 @@ class MiniBFSS(MatrixModel):
             ]
 
 
-class MiniBMN(MatrixModel):
+class MiniBMN_old(MatrixModel):
     def __init__(self, couplings):
         super().__init__(couplings)
         self.build_symmetry_generators()
