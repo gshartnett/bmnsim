@@ -13,7 +13,7 @@ from bmn.bootstrap import BootstrapSystem
 from bmn.models import MiniBMN
 
 d = 3
-L = 2
+L = 4
 model = MiniBMN(couplings={"nu": 1, "lambda": 1})
 checkpoint_path = f"checkpoints/MiniBMN_L_{L}_symmetric"
 
@@ -24,7 +24,7 @@ bootstrap = BootstrapSystem(
     max_degree_L=L,
     symmetry_generators=model.symmetry_generators,
     checkpoint_path=checkpoint_path,
-    verbose=False,
+    verbose=True,
     )
 
 # build the symmetries

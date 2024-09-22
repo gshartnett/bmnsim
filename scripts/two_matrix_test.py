@@ -2,8 +2,8 @@ import numpy as np
 from bmn.config_utils import generate_configs_two_matrix, run_all_configs
 
 L = 3
-g2 = 1
 g4 = 1
+g2 = 1
 
 generate_configs_two_matrix(
     config_filename="test",
@@ -16,6 +16,8 @@ generate_configs_two_matrix(
     odd_degree_vanish=True,
     simplify_quadratic=True,
     optimization_method="newton",
+    maxiters_cvxpy=250_000,
+    cvxpy_solver="MOSEK",
     )
 
 # execute
