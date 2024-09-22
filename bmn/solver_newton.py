@@ -83,6 +83,8 @@ def sdp_minimize(
         solver = cp.ECOS
     elif cvxpy_solver == "OSQP":
         solver = cp.OSQP
+    elif cvxpy_solver == "MOSEK":
+        solver = cp.MOSEK
     else:
         raise NotImplementedError
 
@@ -96,7 +98,11 @@ def sdp_minimize(
     # 2. A @ param == 0
     # 3. ||param||_2 <= radius
 
-    # if the n x n bootstrap matrix is complex, split it up into a 2n x 2n real matrix
+    # If the n x n bootstrap table is complex, split the corresponding bootstrap matrix
+    # into a (2n, 2n) real matrix, rather than a (n, n) complex matrix.
+    # Note: based on the param vector, it could be the case that a complex-valued bootstrap
+    # table gives rise to a real bootstrap matrix - e.g., if odd-degree expectation values
+    # vanish for the given param vector.
     if np.max(np.abs(bootstrap_table_sparse.imag)) > 1e-10:
         debug("Mapping complex bootstrap matrix to real")
         bootstrap_table_sparse_real = bootstrap_table_sparse.real
@@ -124,19 +130,31 @@ def sdp_minimize(
             linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
         )
         loss += penalty_reg * penalty
-    if reg is not None:
-        loss += reg * cp.norm(param)
+    #if reg is not None:
+    loss += reg * cp.norm(param)
+    #debug(f"ADDING NORM REG={reg}")
+    #debug(loss)
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
-    prob.solve(
-        verbose=verbose,
-        max_iters=maxiters,
-        eps_abs=eps_abs,
-        eps_rel=eps_rel,
-        eps_infeas=eps_infeas,
-        solver=solver,
-    )
+    if cvxpy_solver == 'SCS':
+        prob.solve(
+            verbose=verbose,
+            max_iters=maxiters,
+            eps_abs=eps_abs,
+            eps_rel=eps_rel,
+            eps_infeas=eps_infeas,
+            solver=solver,
+        )
+    elif cvxpy_solver == "MOSEK":
+        prob.solve(
+            verbose=verbose,
+            #max_iters=maxiters,
+            #eps_abs=eps_abs,
+            #eps_rel=eps_rel,
+            #eps_infeas=eps_infeas,
+            solver=solver,
+        )
 
     if param.value is None:
         raise ValueError("sdp_minimize failed, None value returned.")
@@ -322,7 +340,7 @@ def solve_bootstrap(
         # grad_pinv = np.linalg.pinv(quad_cons_grad)
 
         # how to handle the quadratic constraints (in progress)
-        if step < 1:
+        if step > -1:
             # only use Ax=b for the non-quadratic constraints
             # impose the quadratic constraints via a penalty term
             debug(f"Not using Ax=b for quadratic constraints")
@@ -355,6 +373,7 @@ def solve_bootstrap(
             radius=radius,
             maxiters=maxiters_cvxpy,
             penalty_reg=penalty_reg,
+            reg=reg,
             eps_abs=eps_abs,
             eps_rel=eps_rel,
             eps_infeas=eps_infeas,
