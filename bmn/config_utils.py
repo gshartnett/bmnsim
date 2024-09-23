@@ -446,6 +446,9 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
             **config_optimizer
             )
 
+    if param is None:
+        return
+
     # record select expectation values
     expectation_values = {
         name: float(bootstrap.get_operator_expectation_value(st_operator=st_operator, param=param).real)

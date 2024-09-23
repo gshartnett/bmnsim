@@ -1,11 +1,9 @@
 from itertools import (
-    combinations,
     combinations_with_replacement,
 )
 
-
 # Function to generate all possible products and remove duplicates
-def unique_products(elements):
+def unique_products(elements) -> list:
     products = set()
 
     # Generate all possible pairs of elements

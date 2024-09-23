@@ -19,7 +19,7 @@ from bmn.linear_algebra import get_null_space_dense
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 #device = torch.device("cpu")
-torch_dtype = torch.complex128
+torch_dtype = torch.float64
 
 
 def solve_bootstrap(
@@ -88,23 +88,10 @@ def solve_bootstrap(
     vec = torch.from_numpy(vec).type(torch_dtype).to(device)
 
     # build the bootstrap array
-    bootstrap_array_torch = (
-        torch.from_numpy(bootstrap.bootstrap_table_sparse.todense()).real
-        #.type(torch.complex)
-        #.to(device)
+    bootstrap_table = (
+        torch.from_numpy(bootstrap.bootstrap_table_sparse.todense())
+        .to(device)
     )
-
-    # cast to real if possible
-    #if torch.max(torch.abs(bootstrap_array_torch.imag)) < 1e-10:
-    #    print(f"Casting bootstrap array to real")
-    #    bootstrap_array_torch = bootstrap_array_torch.real
-    print(f"Bootstrap table dtype: {bootstrap_array_torch.dtype}")
-
-    bootstrap_array_torch = bootstrap_array_torch.type(torch.float64)
-    bootstrap_array_torch = bootstrap_array_torch.type(torch.complex128)
-    debug(f"DROPPING THE IMAGINARY PART OF BOOTSTRAP MATRIX")
-
-    bootstrap_array_torch = bootstrap_array_torch.to(device)
 
     # build the constraints
     quadratic_constraints = bootstrap.quadratic_constraints_numerical
@@ -132,7 +119,7 @@ def solve_bootstrap(
     def operator_loss(param_null, param_particular):
         param = get_full_param(param_null, param_particular)
         expectation_value = vec @ param
-        print(expectation_value)
+        #print(expectation_value)
         return expectation_value
         #return torch.real(vec @ param)
 
@@ -156,9 +143,20 @@ def solve_bootstrap(
 
     def psd_loss(param_null, param_particular):
         param = get_full_param(param_null, param_particular)
-        bootstrap_matrix = (bootstrap_array_torch @ param).reshape(
-            (bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim)
-        )
+        if torch.max(torch.abs(bootstrap_table.imag)) > 1e-10:
+            #debug("Mapping complex bootstrap table to real")
+            bootstrap_table_real = bootstrap_table.real
+            bootstrap_table_imag = bootstrap_table.imag
+            matrix_real = (bootstrap_table_real @ param).reshape((bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim))
+            matrix_imag = (bootstrap_table_imag @ param).reshape((bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim))
+            # stack them
+            top_row = torch.cat((matrix_real, -matrix_imag), dim=1)
+            bottom_row = torch.cat((matrix_imag, matrix_real), dim=1)
+            bootstrap_matrix = torch.cat((top_row, bottom_row), dim=0)
+        else:
+            bootstrap_matrix = (bootstrap_table @ param).reshape(
+                (bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim)
+            )
         smallest_eigv = torch.linalg.eigvalsh(bootstrap_matrix)[0]
         smallest_eigv = torch.real(smallest_eigv)
         return ReLU()(-smallest_eigv)

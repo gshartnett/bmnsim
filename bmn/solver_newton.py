@@ -311,8 +311,6 @@ def solve_bootstrap(
 
     # iterate over steps
     for step in range(maxiters):
-        # step = 0
-        # while step < maxiters:
 
         debug(f"\n\nstep: {step+1}/{maxiters}")
         debug(f"PRNG seed: {PRNG_seed}")
@@ -333,14 +331,12 @@ def solve_bootstrap(
         # produces a second inhomogenous linear equation A' x = b'
         # here, the new equation is grad * (new_param - param) + val = 0
         # this equation will be imposed as a penalty
-
         quad_cons_val, quad_cons_grad = get_quadratic_constraint_vector(
             quadratic_constraints_numerical, param, compute_grad=True
         )
-        # grad_pinv = np.linalg.pinv(quad_cons_grad)
 
         # how to handle the quadratic constraints (in progress)
-        if step > -1:
+        if True:
             # only use Ax=b for the non-quadratic constraints
             # impose the quadratic constraints via a penalty term
             debug(f"Not using Ax=b for quadratic constraints")
@@ -363,32 +359,25 @@ def solve_bootstrap(
         )
 
         # perform the inner convex minimization
-        param, optimization_result = sdp_minimize(
-            linear_objective_vector=linear_objective_vector,
-            bootstrap_table_sparse=bootstrap_table_sparse,
-            linear_inhomogeneous_eq=linear_inhomogeneous_eq,
-            linear_inhomogeneous_penalty=linear_inhomogeneous_penalty,
-            #init=param,
-            # verbose=verbose, # don't need to print out cvxpy info
-            radius=radius,
-            maxiters=maxiters_cvxpy,
-            penalty_reg=penalty_reg,
-            reg=reg,
-            eps_abs=eps_abs,
-            eps_rel=eps_rel,
-            eps_infeas=eps_infeas,
-            cvxpy_solver=cvxpy_solver,
-        )
-
-        """
-        if param is None:
-            param = init
-            penalty_reg *= 0.75
-            step = 0
-            debug(f"param is None, resetting step=0 and reducing penalty_reg to penalty_reg={penalty_reg:.4e}")
-            continue
-            step += 1
-        """
+        try:
+            param, optimization_result = sdp_minimize(
+                linear_objective_vector=linear_objective_vector,
+                bootstrap_table_sparse=bootstrap_table_sparse,
+                linear_inhomogeneous_eq=linear_inhomogeneous_eq,
+                linear_inhomogeneous_penalty=linear_inhomogeneous_penalty,
+                #init=param,
+                # verbose=verbose, # don't need to print out cvxpy info
+                radius=radius,
+                maxiters=maxiters_cvxpy,
+                penalty_reg=penalty_reg,
+                reg=reg,
+                eps_abs=eps_abs,
+                eps_rel=eps_rel,
+                eps_infeas=eps_infeas,
+                cvxpy_solver=cvxpy_solver,
+            )
+        except:
+            return None, None
 
         # print out some diagnostic information
         quad_cons_val = get_quadratic_constraint_vector(
@@ -416,7 +405,7 @@ def solve_bootstrap(
 
         # terminate early if the tolerance is satisfied
         # if penalty_reg * quad_constraint_violation_norm < tol:
-        if step > 4 and max_quad_constraint_violation < tol:
+        if step > (10 - 2) and max_quad_constraint_violation < tol:
             return param, optimization_result
 
         # decay the regularization parameter

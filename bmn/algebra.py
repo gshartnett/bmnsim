@@ -480,6 +480,7 @@ class MatrixSystem:
 
 
 class LinearConstraints:
+    # NOTE this is incomplete and unused
     def __init__(
             self,
             matrix_system: MatrixSystem,
