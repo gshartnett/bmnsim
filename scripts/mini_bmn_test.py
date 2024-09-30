@@ -5,6 +5,8 @@ from bmn.config_utils import generate_configs_bmn, run_all_configs, run_bootstra
 L = 3
 lambd = 1
 nu = 1.0
+energy = 1
+st_operator_to_minimize = "neg_commutator_squared"
 
 generate_configs_bmn(
     config_filename="test",
@@ -17,14 +19,16 @@ generate_configs_bmn(
     load_from_previously_computed=True,
     odd_degree_vanish=False,
     simplify_quadratic=True,
-    #optimization_method='pytorch',
+    st_operator_to_minimize=st_operator_to_minimize,
+    st_operators_evs_to_set={"energy": energy},
     optimization_method="newton",
-    #maxiters_cvxpy=25_000,
     cvxpy_solver='MOSEK',
-    #init_scale=1e0,
-    #lr=1e-1,
-    #radius=1e3,
-    reg=1e4,
+    maxiters=30,
+    init_scale=1e-2,
+    reg=1e-4,
+    penalty_reg=1e4,
+    tol=1e-6,
+    radius=1e5,
     )
 
 # execute

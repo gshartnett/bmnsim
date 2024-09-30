@@ -154,7 +154,15 @@ def sdp_minimize(
             #eps_rel=eps_rel,
             #eps_infeas=eps_infeas,
             solver=solver,
-        )
+            accept_unknown=True, # https://www.cvxpy.org/tutorial/solvers/index.html
+            mosek_params={
+                "MSK_DPAR_OPTIMIZER_MAX_TIME": 100,
+                "MSK_DPAR_BASIS_TOL_S": 1e-8,
+                "MSK_DPAR_BASIS_TOL_X": 1e-8,
+                "MSK_IPAR_INTPNT_MAX_ITERATIONS": 1000,
+                "MSK_IPAR_SIM_MAX_ITERATIONS": 30_000_000
+                },
+            )
 
     if param.value is None:
         raise ValueError("sdp_minimize failed, None value returned.")
@@ -336,12 +344,13 @@ def solve_bootstrap(
         )
 
         # how to handle the quadratic constraints (in progress)
-        if True:
+        if step < 4:
             # only use Ax=b for the non-quadratic constraints
             # impose the quadratic constraints via a penalty term
             debug(f"Not using Ax=b for quadratic constraints")
             linear_inhomogeneous_eq = linear_inhomogeneous_eq_no_quadratic
         else:
+
             debug(f"Using Ax=b for quadratic constraints")
             linear_inhomogeneous_eq = (
                 sparse.vstack(
@@ -352,6 +361,7 @@ def solve_bootstrap(
                     np.asarray(quad_cons_grad.dot(param) - quad_cons_val)[0],
                 ),
             )
+            penalty_reg = 0
 
         linear_inhomogeneous_penalty = (
             quad_cons_grad,
@@ -402,6 +412,10 @@ def solve_bootstrap(
 
         # add the seed to the result
         optimization_result["PRNG_seed"] = PRNG_seed
+
+        # record the boostrap matrix
+        optimization_result["bootstrap_matrix_real"] = bootstrap.get_bootstrap_matrix(param=param).real.tolist()
+        optimization_result["bootstrap_matrix_imag"] = bootstrap.get_bootstrap_matrix(param=param).imag.tolist()
 
         # terminate early if the tolerance is satisfied
         # if penalty_reg * quad_constraint_violation_norm < tol:

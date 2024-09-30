@@ -12,13 +12,21 @@ generate_configs_two_matrix(
     g4=g4,
     max_degree_L=L,
     impose_symmetries=True,
-    load_from_previously_computed=False,
+    load_from_previously_computed=True,
     odd_degree_vanish=True,
     simplify_quadratic=True,
     optimization_method="newton",
-    maxiters_cvxpy=250_000,
-    cvxpy_solver="MOSEK",
+    cvxpy_solver='MOSEK',
+    maxiters=30,
+    init_scale=1e-2,
+    reg=1e-4,
+    penalty_reg=1e4,
+    tol=1e-6,
     )
 
 # execute
-run_all_configs(config_dir=f"TwoMatrix_L_{L}_test", parallel=False, check_if_exists_already=False)
+run_all_configs(
+    config_dir=f"TwoMatrix_L_{L}_test",
+    parallel=False,
+    check_if_exists_already=False
+    )

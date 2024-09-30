@@ -470,18 +470,18 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
     return result
 
 
-def run_all_configs(config_dir, parallel=False, max_workers=6, check_if_exists_already=True):
+def run_all_configs(config_dir, parallel=False, max_workers=6, verbose=True, check_if_exists_already=True):
 
     config_filenames = os.listdir(f"configs/{config_dir}")
     config_filenames = [f[:-5] for f in config_filenames if '.yaml' in f]
-    np.random.shuffle(config_filenames) # shuffle
+    #np.random.shuffle(config_filenames) # shuffle
 
     if not parallel:
         for config_filename in config_filenames:
             run_bootstrap_from_config(config_filename, config_dir, check_if_exists_already=check_if_exists_already)
     else:
         with ProcessPoolExecutor(max_workers) as executor:
-            futures = [executor.submit(run_bootstrap_from_config, config_filename, config_dir) for config_filename in config_filenames]
+            futures = [executor.submit(run_bootstrap_from_config, config_filename, config_dir, verbose, check_if_exists_already) for config_filename in config_filenames]
         for future in futures:
             future.result()
         print('finished!')

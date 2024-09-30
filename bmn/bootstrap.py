@@ -37,7 +37,7 @@ class BootstrapSystem:
         self,
         matrix_system: MatrixSystem,
         hamiltonian: SingleTraceOperator,
-        gauge_generator: MatrixOperator,
+        gauge_generator: MatrixOperator | None,
         max_degree_L: int,
         symmetry_generators: list[SingleTraceOperator] = None,
         tol: float = 1e-10,
@@ -77,7 +77,8 @@ class BootstrapSystem:
         """
         Check that the operator basis used in matrix_system is consistent with gauge and hamiltonian.
         """
-        self.validate_operator(operator=self.gauge_generator)
+        if self.gauge_generator is not None:
+            self.validate_operator(operator=self.gauge_generator)
         self.validate_operator(operator=self.hamiltonian)
         print(f"Bootstrap system instantiated for {len(self.operator_dict)} operators")
         print(f"Attribute: simplify_quadratic = {self.simplify_quadratic}")
@@ -675,9 +676,10 @@ class BootstrapSystem:
         linear_constraints.extend(hamiltonian_constraints)
 
         # gauge constraints
-        gauge_constraints = self.generate_gauge_constraints()
-        print(f"Generated {len(gauge_constraints)} gauge constraints")
-        linear_constraints.extend(gauge_constraints)
+        if self.gauge_generator is not None:
+            gauge_constraints = self.generate_gauge_constraints()
+            print(f"Generated {len(gauge_constraints)} gauge constraints")
+            linear_constraints.extend(gauge_constraints)
 
         # symmetry constraints
         if self.symmetry_generators is not None:
