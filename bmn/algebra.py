@@ -18,6 +18,9 @@ class AbstractMatrixOperator:
     def __init__(self):
         raise NotImplementedError()
 
+    def __contains__(self, other: Self):
+        return other in self.data
+
     def __iter__(self):
         for key, value in self.data.items():
             yield key, value
