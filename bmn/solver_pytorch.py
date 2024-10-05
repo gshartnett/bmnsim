@@ -84,7 +84,6 @@ def solve_bootstrap(
     vec = bootstrap.single_trace_to_coefficient_vector(
         st_operator_to_minimize, return_null_basis=True
     )
-    #vec = bootstrap.conversion_vec * vec
     vec = torch.from_numpy(vec).type(torch_dtype).to(device)
 
     # build the bootstrap array
@@ -119,9 +118,7 @@ def solve_bootstrap(
     def operator_loss(param_null, param_particular):
         param = get_full_param(param_null, param_particular)
         expectation_value = vec @ param
-        #print(expectation_value)
         return expectation_value
-        #return torch.real(vec @ param)
 
     def get_quadratic_constraint_vector(param):
         quadratic_constraints = torch.einsum(
@@ -143,8 +140,10 @@ def solve_bootstrap(
 
     def psd_loss(param_null, param_particular):
         param = get_full_param(param_null, param_particular)
+
+        # complex bootstrap matrix
         if torch.max(torch.abs(bootstrap_table.imag)) > 1e-10:
-            #debug("Mapping complex bootstrap table to real")
+            #debug("Mapping complex bootstrap table to real") # this prints every single iteration, not just evey 100
             bootstrap_table_real = bootstrap_table.real
             bootstrap_table_imag = bootstrap_table.imag
             matrix_real = (bootstrap_table_real @ param).reshape((bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim))
@@ -153,13 +152,18 @@ def solve_bootstrap(
             top_row = torch.cat((matrix_real, -matrix_imag), dim=1)
             bottom_row = torch.cat((matrix_imag, matrix_real), dim=1)
             bootstrap_matrix = torch.cat((top_row, bottom_row), dim=0)
+
+        # real bootstrap matrix
         else:
-            bootstrap_matrix = (bootstrap_table @ param).reshape(
+            bootstrap_matrix = (bootstrap_table.real @ param).reshape(
                 (bootstrap.bootstrap_matrix_dim, bootstrap.bootstrap_matrix_dim)
             )
-        smallest_eigv = torch.linalg.eigvalsh(bootstrap_matrix)[0]
-        smallest_eigv = torch.real(smallest_eigv)
-        return ReLU()(-smallest_eigv)
+        #smallest_eigv = torch.linalg.eigvalsh(bootstrap_matrix)[0]
+        #smallest_eigv = torch.real(smallest_eigv)
+        #return ReLU()(-smallest_eigv)
+
+        # return the l2 norm of the vector of negative eigenvalues
+        return torch.sqrt(torch.sum(torch.square(ReLU()(-torch.real(torch.linalg.eigvalsh(bootstrap_matrix))))))
 
     def build_loss(param_null, param_particular, penalty_reg=penalty_reg):
         loss = (
