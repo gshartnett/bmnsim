@@ -60,7 +60,7 @@ def generate_optimization_configs_newton(
     maxiters_cvxpy=10_000,
     tol=1e-7,
     reg=1e-4,
-    penalty_reg=1e6,
+    penalty_reg=0,
     penalty_reg_decay_rate=None,
     eps_abs=1e-5,
     eps_rel=1e-5,
