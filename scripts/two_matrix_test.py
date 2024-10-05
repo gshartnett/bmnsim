@@ -19,9 +19,9 @@ generate_configs_two_matrix(
     cvxpy_solver='MOSEK',
     maxiters=30,
     init_scale=1e-2,
-    reg=1e-4,
-    penalty_reg=1e4,
-    tol=1e-6,
+    reg=1e-5,
+    penalty_reg=0,
+    tol=1e-7,
     )
 
 # execute

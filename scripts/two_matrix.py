@@ -11,8 +11,8 @@ config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}"
 #config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_pytorch"
 #config_dir = f"TwoMatrix_L_{L}_symmetric_energy_fixed_g2_{g2}_newton_Axb"
 
-for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:
-    for energy in np.linspace(-10, 30, 81):
+for st_operator_to_minimize in ["x_2", "neg_x_2"]:
+    for energy in np.linspace(0.9, 1.4, 81):
         energy = float(np.round(energy, decimals=6))
         generate_configs_two_matrix(
             config_filename=f"energy_{str(energy)}_op_to_min_{st_operator_to_minimize}",
@@ -29,9 +29,9 @@ for st_operator_to_minimize in ["x_2", "neg_x_2", "x_4", "neg_x_4"]:
             cvxpy_solver='MOSEK',
             maxiters=30,
             init_scale=1e-2,
-            reg=1e1,
-            penalty_reg=1e4,
-            tol=1e-6,
+            reg=1e-4,
+            penalty_reg=0,
+            tol=1e-7,
             )
 
 # execute

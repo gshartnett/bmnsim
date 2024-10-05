@@ -6,16 +6,15 @@ L = 3
 lambd = 1
 
 for st_operator_to_minimize in ["x_2", "x_4", "neg_x_2", "neg_commutator_squared"]:
-    #for nu in np.linspace(0.1, 10, 100):
-    for nu in [1.0]:
+    for nu in np.linspace(0.1, 10, 100):
         for energy in np.linspace(-10, 30, 81):
 
             nu = float(np.round(nu, decimals=6))
             energy = float(np.round(energy, decimals=6))
 
             checkpoint_path = f"MiniBMN_L_{L}_symmetric_nu_{nu}_lamb_{lambd}"
-            config_dir = f"MiniBMN_L_{L}_symmetric_tmp"
-            config_filename = f"nu_{nu}_lambd_{lambd}_energy_{energy}_st_operator_to_minimize_{st_operator_to_minimize}"
+            config_dir = f"MiniBMN_L_{L}_symmetric"
+            config_filename = f"energy_{energy}_st_operator_to_minimize_{st_operator_to_minimize}_nu_{nu}_lambd_{lambd}"
 
             generate_configs_bmn(
                 config_filename=config_filename,
@@ -33,9 +32,9 @@ for st_operator_to_minimize in ["x_2", "x_4", "neg_x_2", "neg_commutator_squared
                 cvxpy_solver='MOSEK',
                 maxiters=30,
                 init_scale=1e-2,
-                reg=1e1,
-                penalty_reg=1e4,
-                tol=1e-6,
+                reg=1e-5,
+                penalty_reg=0,
+                tol=1e-7,
                 )
 
 # execute

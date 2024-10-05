@@ -4,7 +4,7 @@ from bmn.config_utils import generate_configs_bfss, run_all_configs, run_bootstr
 # generate the config files
 L = 3
 
-energy = 10.7
+energy = 1.0
 st_operator_to_minimize = "x_2"
 
 generate_configs_bfss(
@@ -17,14 +17,17 @@ generate_configs_bfss(
     load_from_previously_computed=True,
     odd_degree_vanish=True,
     simplify_quadratic=True,
-    #optimization_method='pytorch',
-    optimization_method="newton",
-    maxiters_cvxpy=250_000,
-    cvxpy_solver='MOSEK',
-    #init_scale=1e0,
-    #lr=1e-1,
-    #radius=1e3,
-    reg=1e4,
+    optimization_method="pytorch",
+    lr=1e-2,
+    penalty_reg=1e3,
+    #optimization_method="newton",
+    #cvxpy_solver='MOSEK',
+    #maxiters=30,
+    #init_scale=1e-2,
+    #reg=1e-5,
+    #penalty_reg=0,
+    #tol=1e-7,
+    #radius=1e6,
     )
 
 # execute

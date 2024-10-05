@@ -1,33 +1,41 @@
 import numpy as np
 from bmn.config_utils import generate_configs_three_matrix, run_all_configs
 
-L = 2
+L = 3
 
 lambd = 1
 nu = 1
 
-g2 = nu**2
-g3 = float(3 * nu * np.sqrt(lambd))
+g2 = float(np.round(nu**2, decimals=6))
 g4 = lambd
+#g3 = float(3 * nu * np.sqrt(lambd)) # set g3 to zero, while keeping g2 and g4 related as in the MiniBFSS model
+g3 = 0.1
+
+energy = 1
+st_operator_to_minimize = "x_2"
 
 generate_configs_three_matrix(
     config_filename="test",
     config_dir=f"ThreeMatrix_L_{L}_test",
+    checkpoint_path=f"ThreeMatrix_L_{L}_symmetric_g2_{g2}_g3_{g3}_g4_{g4}",
     g2=g2,
     g3=g3,
     g4=g4,
     max_degree_L=L,
     impose_symmetries=True,
-    load_from_previously_computed=False,
+    load_from_previously_computed=True,
     odd_degree_vanish=False,
     simplify_quadratic=True,
+    st_operator_to_minimize=st_operator_to_minimize,
+    st_operators_evs_to_set={"energy": energy},
     optimization_method="newton",
     cvxpy_solver='MOSEK',
-    #cvxpy_solver='SCS',
-    maxiters_cvxpy=250_000,
-    #radius=1e2,
-    #init_scale=0,
-    reg=1e2,
+    maxiters=30,
+    init_scale=1e-2,
+    reg=1e-4,
+    penalty_reg=0,
+    tol=1e-7,
+    radius=1e6,
     )
 
 # execute
