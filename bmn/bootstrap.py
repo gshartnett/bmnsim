@@ -1062,7 +1062,7 @@ class BootstrapSystem:
                 self.bootstrap_table_sparse,
             )
 
-    def get_bootstrap_matrix(self, param: np.ndarray) -> np.ndarray:
+    def get_bootstrap_matrix(self, param: np.ndarray, atol:float=1e-8) -> np.ndarray:
         """
         Build the bootstrap matrix for a given null parameter vector.
 
@@ -1091,8 +1091,8 @@ class BootstrapSystem:
         )
 
         # verify that matrix is Hermitian
-        if not ishermitian(bootstrap_matrix, atol=1e-10):
-            raise ValueError(f"Bootstrap matrix is not symmetric.")
+        if not ishermitian(bootstrap_matrix, atol=atol):
+            raise ValueError(f"Bootstrap matrix is not symmetric for atol={atol:.2e}.")
 
         return bootstrap_matrix
 
