@@ -125,16 +125,16 @@ def sdp_minimize(
     # the loss to minimize
     loss = linear_objective_vector @ param
 
-    # add possible penalty terms
+    # add possible penalty / regularization terms
+    # Ax=b penalty
     if linear_inhomogeneous_penalty is not None:
         penalty = cp.norm(
             linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
         )
         loss += penalty_reg * penalty
-    #if reg is not None:
+
+    # l2 norm on param vector
     loss += reg * cp.norm(param)
-    #debug(f"ADDING NORM REG={reg}")
-    #debug(loss)
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
@@ -178,7 +178,6 @@ def sdp_minimize(
         (bootstrap_table_sparse @ param.value).reshape(matrix_dim, matrix_dim)
     )[0]
     debug(f"sdp_minimize status: {maxiters}: {prob.status}")
-    #debug(f"sdp_minimize ||x||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
     debug(
         f"sdp_minimize bootstrap matrix min eigenvalue: {min_bootstrap_eigenvalue:.4e}"
@@ -203,14 +202,12 @@ def sdp_minimize_null(
     linear_inhomogeneous_eq: tuple[csr_matrix, np.ndarray],
     null_space_projector,
     param_particular,
-    linear_inhomogeneous_penalty: Optional[tuple[csr_matrix, np.ndarray]] = None,
     radius: float = np.inf,
     maxiters: int = 2500,
     eps_abs: float = 1e-5,
     eps_rel: float = 1e-5,
     eps_infeas: float = 1e-7,
     reg: float = 1e-4,
-    penalty_reg: float = 1e6,
     verbose: bool = False,
     cvxpy_solver: str = "SCS",
 ) -> tuple[bool, str, np.ndarray]:
@@ -279,6 +276,7 @@ def sdp_minimize_null(
     num_variables = bootstrap_table_sparse.shape[1]
     param_null = cp.Variable(num_variables) # declare the cvxpy param
 
+    # write param vector as particular solution plus a null term
     param = null_space_projector @ param_null + param_particular
 
     # build the constraints
@@ -304,20 +302,13 @@ def sdp_minimize_null(
     else:
         constraints = [cp.reshape(bootstrap_table_sparse @ param, (matrix_dim, matrix_dim)) >> 0]
 
-    #constraints += [
-    #    linear_inhomogeneous_eq[0] @ param == linear_inhomogeneous_eq[1]
-    #]
+    # constrain param vector to lie within a ball of a given radius
     constraints += [cp.norm(param) <= radius]
 
     # the loss to minimize
     loss = linear_objective_vector @ param
 
-    # add possible penalty terms
-    #if linear_inhomogeneous_penalty is not None:
-    #    penalty = cp.norm(
-    #        linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
-    #    )
-    #    loss += penalty_reg * penalty
+    # add l2 regularization
     loss += reg * cp.norm(param)
 
     # solve the optimization problem
@@ -393,8 +384,7 @@ def solve_bootstrap(
     eps_rel: float = 1e-5,
     eps_infeas: float = 1e-7,
     reg: float = 1e-4,
-    penalty_reg: float = 1e6,
-    penalty_reg_decay_rate: Optional[float] = None,
+    penalty_reg: float = 0,
     PRNG_seed=None,
     radius: float = 1e8,
     cvxpy_solver: str = "SCS",
@@ -547,11 +537,11 @@ def solve_bootstrap(
             )
 
         # build a penalty term to enforce Ax=b for the linearized quadratic constraints
+        # NOTE only used for the original, non-null sdp_minimize method
         linear_inhomogeneous_penalty = (
             quad_cons_grad,
             np.asarray(quad_cons_grad.dot(param_array) - quad_cons_val)[0],
         )
-        penalty_reg = 0 #TODO remove this!
 
         # get the null space projector
         A, b = linear_inhomogeneous_eq
@@ -566,18 +556,15 @@ def solve_bootstrap(
                 linear_objective_vector=linear_objective_vector,
                 bootstrap_table_sparse=bootstrap_table_sparse,
                 linear_inhomogeneous_eq=linear_inhomogeneous_eq,
-                param_particular=param_particular,
                 null_space_projector=null_space_projector,
-                linear_inhomogeneous_penalty=linear_inhomogeneous_penalty,
-                #init=param,
-                # verbose=verbose, # don't need to print out cvxpy info
+                param_particular=param_particular,
                 radius=radius,
                 maxiters=maxiters_cvxpy,
-                penalty_reg=penalty_reg,
-                reg=reg,
                 eps_abs=eps_abs,
                 eps_rel=eps_rel,
                 eps_infeas=eps_infeas,
+                reg=reg,
+                verbose=False,
                 cvxpy_solver=cvxpy_solver,
             )
         except:
@@ -596,9 +583,7 @@ def solve_bootstrap(
             quad_constraint_violation_norm
         )
 
-        # debug(f"penalty_reg * ||q_I|| = {penalty_reg * quad_constraint_violation_norm:.4e}")
         debug(f"norm(param) = {np.linalg.norm(param_array):.4e}")
-        # debug(f"penalty_reg * quad_constraint_violation_norm < tol = {penalty_reg * quad_constraint_violation_norm < tol}")
         debug(
             f"max violation of quadratic constraints: {max_quad_constraint_violation:.4e}"
         )
@@ -612,12 +597,7 @@ def solve_bootstrap(
         optimization_result["bootstrap_matrix_imag"] = bootstrap.get_bootstrap_matrix(param=param_array).imag.tolist()
 
         # terminate early if the tolerance is satisfied
-        # if penalty_reg * quad_constraint_violation_norm < tol:
         if step > (10 - 2) and max_quad_constraint_violation < tol:
             return param_array, optimization_result
-
-        # decay the regularization parameter
-        if penalty_reg_decay_rate is not None:
-            penalty_reg = penalty_reg * penalty_reg_decay_rate
 
     return param_array, optimization_result
