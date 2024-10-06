@@ -1,36 +1,30 @@
-import numpy as np
-from bmn.config_utils import generate_configs_bmn, run_all_configs, run_bootstrap_from_config
+from bmn.config_utils import generate_config_bfss, run_all_configs
 
 # generate the config files
 L = 3
-lambd = 1
-nu = 1.0
+
 energy = 1.5
 st_operator_to_minimize = "x_2"
 
-generate_configs_bmn(
+generate_config_bfss(
     config_filename="test",
-    config_dir=f"MiniBMN_L_{L}_test",
-    checkpoint_path=f"MiniBMN_L_{L}_symmetric_nu_{nu}_lamb_{lambd}",
-    nu=nu,
-    lambd=lambd,
+    config_dir=f"MiniBFSS_L_{L}_test",
+    checkpoint_path=f"MiniBFSS_L_{L}_symmetric",
     max_degree_L=L,
-    impose_symmetries=True,
     load_from_previously_computed=True,
-    odd_degree_vanish=False,
+    odd_degree_vanish=True,
     simplify_quadratic=True,
     st_operator_to_minimize=st_operator_to_minimize,
     st_operators_evs_to_set={"energy": energy},
     #optimization_method="pytorch",
     optimization_method="newton",
     cvxpy_solver='MOSEK',
-    reg=1e-5,
-    penalty_reg=0,
+    reg=1e-4,
     )
 
 # execute
 run_all_configs(
-    config_dir=f"MiniBMN_L_{L}_test",
+    config_dir=f"MiniBFSS_L_{L}_test",
     parallel=False,
     check_if_exists_already=False
     )

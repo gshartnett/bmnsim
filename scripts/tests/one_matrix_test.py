@@ -1,13 +1,12 @@
-import numpy as np
 from bmn.brezin import compute_Brezin_energy
-from bmn.config_utils import generate_configs_one_matrix, run_all_configs
+from bmn.config_utils import generate_config_one_matrix, run_all_configs
 
 L = 3
 g2 = 1
 g4 = 1
 g6 = 0
 
-generate_configs_one_matrix(
+generate_config_one_matrix(
     config_filename="test",
     config_dir=f"OneMatrix_L_{L}_test",
     g2=g2,
