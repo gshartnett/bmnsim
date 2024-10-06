@@ -123,18 +123,22 @@ def sdp_minimize(
     constraints += [cp.norm(param) <= radius]
 
     # the loss to minimize
-    loss = linear_objective_vector @ param
+    if linear_objective_vector is not None:
+        loss = linear_objective_vector @ param
 
-    # add possible penalty / regularization terms
-    # Ax=b penalty
-    if linear_inhomogeneous_penalty is not None:
-        penalty = cp.norm(
-            linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
-        )
-        loss += penalty_reg * penalty
+        # add possible penalty / regularization terms
+        # Ax=b penalty
+        if linear_inhomogeneous_penalty is not None:
+            penalty = cp.norm(
+                linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
+            )
+            loss += penalty_reg * penalty
 
-    # l2 norm on param vector
-    loss += reg * cp.norm(param)
+        # l2 norm on param vector
+        loss += reg * cp.norm(param)
+
+    else:
+        loss = cp.norm(param)
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
@@ -306,10 +310,15 @@ def sdp_minimize_null(
     constraints += [cp.norm(param) <= radius]
 
     # the loss to minimize
-    loss = linear_objective_vector @ param
+    if linear_objective_vector is not None:
+        loss = linear_objective_vector @ param
 
-    # add l2 regularization
-    loss += reg * cp.norm(param)
+        # add l2 regularization
+        loss += reg * cp.norm(param)
+
+    else:
+        debug(f"Minimizing l2 norm of param")
+        loss = cp.norm(param)
 
     # solve the optimization problem
     prob = cp.Problem(cp.Minimize(loss), constraints)
@@ -333,10 +342,14 @@ def sdp_minimize_null(
             accept_unknown=True, # https://www.cvxpy.org/tutorial/solvers/index.html
             mosek_params={
                 #"MSK_DPAR_OPTIMIZER_MAX_TIME": 100,
-                #"MSK_DPAR_BASIS_TOL_S": 1e-8,
-                #"MSK_DPAR_BASIS_TOL_X": 1e-8,
-                #"MSK_IPAR_INTPNT_MAX_ITERATIONS": 1000,
-                #"MSK_IPAR_SIM_MAX_ITERATIONS": 30_000_000
+                #"MSK_IPAR_BI_MAX_ITERATIONS": 10_000_000,
+                #"MSK_IPAR_INTPNT_MAX_ITERATIONS": 1000_00,
+                #"MSK_IPAR_SIM_MAX_ITERATIONS": 30_000_000,
+                #'MSK_DPAR_INTPNT_TOL_REL_GAP': 1e-9,
+                #'MSK_DPAR_INTPNT_TOL_PFEAS': 1e-9,
+                #'MSK_DPAR_INTPNT_TOL_DFEAS': 1e-9,
+                #'MSK_IPAR_PRESOLVE_USE': 2,  # Full presolve
+                #'MSK_IPAR_INTPNT_MAX_ITERATIONS': 1000,
                 },
             )
 
@@ -351,7 +364,7 @@ def sdp_minimize_null(
     min_bootstrap_eigenvalue = np.linalg.eigvalsh(
         (bootstrap_table_sparse @ param.value).reshape(matrix_dim, matrix_dim)
     )[0]
-    debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
+    debug(f"sdp_minimize status: {prob.status}")
     #debug(f"sdp_minimize ||x||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
     debug(
@@ -456,7 +469,7 @@ def solve_bootstrap(
 
     # initialize the variable vector
     if init is None:
-        debug(f"Initializing randomly")
+        debug(f"Initializing randomly with init_scale={init_scale:.2e}")
         init = init_scale * np.random.normal(size=bootstrap.param_dim_null)
     else:
         init = np.asarray(init)
@@ -464,14 +477,17 @@ def solve_bootstrap(
     param_array = init
 
     # map the single trace operator whose expectation value we wish to minimize to a coefficient vector
-    linear_objective_vector = bootstrap.single_trace_to_coefficient_vector(
-        st_operator_to_minimize, return_null_basis=True
-    )
-    if not np.allclose(
-        linear_objective_vector.imag, np.zeros_like(linear_objective_vector)
-    ):
-        raise ValueError("Error, the coefficient vector is complex but should be real.")
-    linear_objective_vector = linear_objective_vector.real
+    if st_operator_to_minimize is not None:
+        linear_objective_vector = bootstrap.single_trace_to_coefficient_vector(
+            st_operator_to_minimize, return_null_basis=True
+        )
+        if not np.allclose(
+            linear_objective_vector.imag, np.zeros_like(linear_objective_vector)
+        ):
+            raise ValueError("Error, the coefficient vector is complex but should be real.")
+        linear_objective_vector = linear_objective_vector.real
+    else:
+        linear_objective_vector = None
 
     # build the A, b matrix and vector for the linear inhomogeneous constraints
     # this will always include the constraint that tr(1) = 1, and possibly other constraints as well
@@ -587,7 +603,8 @@ def solve_bootstrap(
         debug(
             f"max violation of quadratic constraints: {max_quad_constraint_violation:.4e}"
         )
-        debug(f"objective: {linear_objective_vector @ param_array:.4f}")
+        if linear_objective_vector is not None:
+            debug(f"objective: {linear_objective_vector @ param_array:.4f}")
 
         # add the seed to the result
         optimization_result["PRNG_seed"] = PRNG_seed
