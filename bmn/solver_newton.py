@@ -157,11 +157,12 @@ def sdp_minimize(
             solver=solver,
             accept_unknown=True, # https://www.cvxpy.org/tutorial/solvers/index.html
             mosek_params={
-                "MSK_DPAR_OPTIMIZER_MAX_TIME": 100,
-                "MSK_DPAR_BASIS_TOL_S": 1e-8,
-                "MSK_DPAR_BASIS_TOL_X": 1e-8,
-                "MSK_IPAR_INTPNT_MAX_ITERATIONS": 1000,
-                "MSK_IPAR_SIM_MAX_ITERATIONS": 30_000_000
+                #"MSK_DPAR_OPTIMIZER_MAX_TIME": 100,
+                #"MSK_DPAR_BASIS_TOL_S": 1e-8,
+                #"MSK_DPAR_BASIS_TOL_X": 1e-8,
+                #"MSK_IPAR_INTPNT_MAX_ITERATIONS": 1000,
+                #"MSK_IPAR_SIM_MAX_ITERATIONS": 30_000_000,
+                #'MSK_IPAR_INTPNT_SOLVE_FORM': 'MSK_SOLVE_DUAL',
                 },
             )
 
@@ -176,7 +177,7 @@ def sdp_minimize(
     min_bootstrap_eigenvalue = np.linalg.eigvalsh(
         (bootstrap_table_sparse @ param.value).reshape(matrix_dim, matrix_dim)
     )[0]
-    debug(f"sdp_minimize status after maxiters_cvxpy {maxiters}: {prob.status}")
+    debug(f"sdp_minimize status: {maxiters}: {prob.status}")
     #debug(f"sdp_minimize ||x||: {ball_constraint:.4e}")
     debug(f"sdp_minimize ||A x - b||: {violation_of_linear_constraints:.4e}")
     debug(
