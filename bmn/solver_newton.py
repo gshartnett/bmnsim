@@ -555,7 +555,7 @@ def solve_bootstrap(
         # get the null space projector
         A, b = linear_inhomogeneous_eq
         A = A.todense()
-        param_particular = np.linalg.lstsq(A, b)[0]
+        param_particular = np.linalg.lstsq(A, b, rcond=None)[0]
         null_space_matrix = get_null_space_dense(matrix=A)
         null_space_projector = null_space_matrix @ np.linalg.pinv(null_space_matrix)
 
