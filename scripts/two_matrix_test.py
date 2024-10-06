@@ -5,6 +5,9 @@ L = 3
 g4 = 1
 g2 = 1
 
+energy = 1.5
+st_operator_to_minimize = "x_2"
+
 generate_configs_two_matrix(
     config_filename="test",
     config_dir=f"TwoMatrix_L_{L}_test",
@@ -15,13 +18,13 @@ generate_configs_two_matrix(
     load_from_previously_computed=True,
     odd_degree_vanish=True,
     simplify_quadratic=True,
-    optimization_method="newton",
-    cvxpy_solver='MOSEK',
-    maxiters=30,
-    init_scale=1e-2,
-    reg=1e-5,
-    penalty_reg=0,
-    tol=1e-7,
+    st_operator_to_minimize=st_operator_to_minimize,
+    st_operators_evs_to_set={"energy": energy},
+    optimization_method="pytorch",
+    #optimization_method="newton",
+    #cvxpy_solver='MOSEK',
+    #reg=1e-5,
+    #penalty_reg=0,
     )
 
 # execute

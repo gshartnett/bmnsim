@@ -11,7 +11,7 @@ g4 = lambd
 #g3 = float(3 * nu * np.sqrt(lambd)) # set g3 to zero, while keeping g2 and g4 related as in the MiniBFSS model
 g3 = 0.1
 
-energy = 1
+energy = 2.5
 st_operator_to_minimize = "x_2"
 
 generate_configs_three_matrix(
@@ -28,14 +28,11 @@ generate_configs_three_matrix(
     simplify_quadratic=True,
     st_operator_to_minimize=st_operator_to_minimize,
     st_operators_evs_to_set={"energy": energy},
+    #optimization_method="pytorch",
     optimization_method="newton",
     cvxpy_solver='MOSEK',
-    maxiters=30,
-    init_scale=1e-2,
-    reg=1e-4,
+    reg=1e-5,
     penalty_reg=0,
-    tol=1e-7,
-    radius=1e6,
     )
 
 # execute
