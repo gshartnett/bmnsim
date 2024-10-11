@@ -15,8 +15,8 @@ class AbstractMatrixOperator:
     Abstract matrix operator class.
     """
 
-    def __init__(self):
-        raise NotImplementedError()
+    def __init__(self, data):
+        self.data = data
 
     def __contains__(self, other: Self):
         return other in self.data
@@ -60,7 +60,7 @@ class AbstractMatrixOperator:
         else:
             raise ValueError("Warning, right multiplication only valid for numbers")
 
-    def __mul__(self):
+    def __mul__(self, other: Union[Self, Number]):
         raise NotImplementedError()
 
     def __eq__(self, other: Self) -> bool:
@@ -88,8 +88,11 @@ class MatrixOperator(AbstractMatrixOperator):
     """
 
     def __init__(self, data: dict[tuple : list[Number]], tol: float = TOL):
+        super().__init__(data)
         self.tol = tol
         self.data = {}
+
+        # validate the data
         for op, coeff in data.items():
             if np.abs(coeff) > self.tol:
                 if isinstance(op, tuple):
@@ -100,6 +103,8 @@ class MatrixOperator(AbstractMatrixOperator):
                     raise ValueError(
                         "All operators must be tuples of strings, e.g. (X, Y, P)."
                     )
+
+        # set some useful attributes
         self.operators = list(self.data.keys())
         self.coeffs = list(self.data.values())
         self.degrees = [len(op) for op in self.operators]
