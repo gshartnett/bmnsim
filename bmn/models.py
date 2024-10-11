@@ -1,8 +1,3 @@
-'''
-TODO
-- consider consolidating BFSS and ThreeMatrixModel
-- consider consolidating 2- and 3- Matrix Models
-'''
 import numpy as np
 from bmn.algebra import MatrixSystem, SingleTraceOperator, MatrixOperator
 
@@ -15,16 +10,16 @@ class MatrixModel():
         self.build_hamiltonian()
         self.build_operators_to_track()
 
-    def build_matrix_system():
+    def build_matrix_system(self):
         raise NotImplementedError()
 
-    def build_gauge_generator():
+    def build_gauge_generator(self):
         raise NotImplementedError()
 
-    def build_hamiltonian():
+    def build_hamiltonian(self):
         raise NotImplementedError()
 
-    def build_operators_to_track():
+    def build_operators_to_track(self):
         raise NotImplementedError()
 
 
