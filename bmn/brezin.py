@@ -9,7 +9,7 @@ from scipy.integrate import quad
 from scipy.optimize import root_scalar
 
 
-def fermi_level_integrand(x: float, eps: float, g: float) -> float:
+def fermi_level_integrand(x: float, eps: float, g_value: float) -> float:
     """
     Integrand for Eq 80b in Brezin et al.
 
@@ -19,7 +19,7 @@ def fermi_level_integrand(x: float, eps: float, g: float) -> float:
         The dummy integration variable, aka lambda in the paper.
     eps : float
         The scaled Fermi level.
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -29,12 +29,12 @@ def fermi_level_integrand(x: float, eps: float, g: float) -> float:
     """
     return (
         (1 / np.pi)
-        * (2 * eps - x**2 - 2 * g * x**4) ** (1 / 2)
-        * np.heaviside(2 * eps - x**2 - 2 * g * x**4, 0.5)
+        * (2 * eps - x**2 - 2 * g_value * x**4) ** (1 / 2)
+        * np.heaviside(2 * eps - x**2 - 2 * g_value * x**4, 0.5)
     )
 
 
-def fermi_level_integral(eps: float, g: float) -> float:
+def fermi_level_integral(eps: float, g_value: float) -> float:
     """
     Integrand for Eq 80b in Brezin et al.
     The integration limits are determined by the constraint
@@ -44,7 +44,7 @@ def fermi_level_integral(eps: float, g: float) -> float:
     ----------
     eps : float
         The scaled Fermi level.
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -52,7 +52,7 @@ def fermi_level_integral(eps: float, g: float) -> float:
     float
         The value of the integral.
     """
-    int_limit_upper = np.sqrt((-1 + np.sqrt(1 + 16 * g * eps)) / (4 * g))
+    int_limit_upper = np.sqrt((-1 + np.sqrt(1 + 16 * g_value * eps)) / (4 * g_value))
     int_limit_lower = -int_limit_upper
     result, _ = quad(
         fermi_level_integrand,
@@ -60,13 +60,13 @@ def fermi_level_integral(eps: float, g: float) -> float:
         int_limit_upper,
         args=(
             eps,
-            g,
+            g_value,
         ),
     )
     return result
 
 
-def energy_integrand(x: float, eps: float, g: float) -> float:
+def energy_integrand(x: float, eps: float, g_value: float) -> float:
     """
     Integrand for Eq 80a in Brezin et al.
 
@@ -76,7 +76,7 @@ def energy_integrand(x: float, eps: float, g: float) -> float:
         The dummy integration variable, aka lambda in the paper.
     eps : float
         The scaled Fermi level.
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -86,12 +86,12 @@ def energy_integrand(x: float, eps: float, g: float) -> float:
     """
     return (
         (1 / (3 * np.pi))
-        * (2 * eps - x**2 - 2 * g * x**4) ** (3 / 2)
-        * np.heaviside(2 * eps - x**2 - 2 * g * x**4, 0.5)
+        * (2 * eps - x**2 - 2 * g_value * x**4) ** (3 / 2)
+        * np.heaviside(2 * eps - x**2 - 2 * g_value * x**4, 0.5)
     )
 
 
-def energy_integral(eps: float, g: float) -> float:
+def energy_integral(eps: float, g_value: float) -> float:
     """
     Integrand for Eq 80a in Brezin et al.
     The integration limits are determined by the constraint
@@ -101,7 +101,7 @@ def energy_integral(eps: float, g: float) -> float:
     ----------
     eps : float
         The scaled Fermi level.
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -109,7 +109,7 @@ def energy_integral(eps: float, g: float) -> float:
     float
         The value of the integral.
     """
-    int_limit_upper = np.sqrt((-1 + np.sqrt(1 + 16 * g * eps)) / (4 * g))
+    int_limit_upper = np.sqrt((-1 + np.sqrt(1 + 16 * g_value * eps)) / (4 * g_value))
     int_limit_lower = -int_limit_upper
     result, _ = quad(
         energy_integrand,
@@ -117,13 +117,13 @@ def energy_integral(eps: float, g: float) -> float:
         int_limit_upper,
         args=(
             eps,
-            g,
+            g_value,
         ),
     )
     return eps - result
 
 
-def fermi_level_eqn(eps: float, g: float) -> float:
+def fermi_level_eqn(eps: float, g_value: float) -> float:
     """
     Eq. 80b in Brezin et al
 
@@ -131,7 +131,7 @@ def fermi_level_eqn(eps: float, g: float) -> float:
     ----------
     eps : float
         The scaled Fermi level.
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -139,10 +139,10 @@ def fermi_level_eqn(eps: float, g: float) -> float:
     float
         The value of the integral.
     """
-    return fermi_level_integral(eps, g) - 1
+    return fermi_level_integral(eps, g_value) - 1
 
 
-def compute_Brezin_energy(g: float) -> float:
+def compute_Brezin_energy(g_value: float) -> float:
     """
     The energy (divided by N^2) of the matrix model in the large-N limit
     as calculated in Eq 80a.
@@ -151,7 +151,7 @@ def compute_Brezin_energy(g: float) -> float:
 
     Parameters
     ----------
-    g : float
+    g_value : float
         The quartic coupling constant.
 
     Returns
@@ -159,12 +159,12 @@ def compute_Brezin_energy(g: float) -> float:
     float
         The energy.
     """
-    sol = root_scalar(fermi_level_eqn, args=(g), bracket=[0, 10], method="brentq")
-    return energy_integral(eps=sol.root, g=g)
+    sol = root_scalar(fermi_level_eqn, args=(g_value), bracket=[0, 10], method="brentq")
+    return energy_integral(eps=sol.root, g_value=g_value)
 
 
-def compute_Brezin_energy_Han_conventions(g: float) -> float:
-    return 2 * compute_Brezin_energy(g / 2)
+def compute_Brezin_energy_Han_conventions(g_value: float) -> float:
+    return 2 * compute_Brezin_energy(g_value / 2)
 
 
 if __name__ == "__main__":
@@ -186,5 +186,5 @@ if __name__ == "__main__":
         computed_val = compute_Brezin_energy(g)
         error = np.abs(computed_val - table_val)
         print(
-            f"  g = {g} | table 3 value = {table_val} | computed value = {computed_val:.03f} | error = {error}"
+            f"  g = {g} | table 3 value = {table_val} | computed value = {computed_val:.03f} | error = {error:.4e}"
         )
