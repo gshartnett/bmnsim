@@ -25,7 +25,6 @@ def sdp_minimize(
     eps_rel: float = 1e-5,
     eps_infeas: float = 1e-7,
     reg: float = 1e-4,
-    penalty_reg: float = 1e6,
     verbose: bool = False,
     cvxpy_solver: str = "SCS",
 ) -> tuple[bool, str, np.ndarray]:
@@ -132,7 +131,6 @@ def sdp_minimize(
             penalty = cp.norm(
                 linear_inhomogeneous_penalty[0] @ param - linear_inhomogeneous_penalty[1]
             )
-            loss += penalty_reg * penalty
 
         # l2 norm on param vector
         loss += reg * cp.norm(param)
@@ -397,7 +395,6 @@ def solve_bootstrap(
     eps_rel: float = 1e-5,
     eps_infeas: float = 1e-7,
     reg: float = 1e-4,
-    penalty_reg: float = 0,
     PRNG_seed=None,
     radius: float = 1e8,
     cvxpy_solver: str = "SCS",
@@ -515,7 +512,6 @@ def solve_bootstrap(
         debug(f"PRNG seed: {PRNG_seed}")
         debug(f"radius: {radius:.4e}")
         debug(f"reg: {reg:.4e}")
-        debug(f"penalty_reg: {penalty_reg:.4e}")
         debug(f"eps_abs: {eps_abs:.4e}")
         debug(f"eps_rel: {eps_rel:.4e}")
         debug(f"eps_infeas: {eps_infeas:.4e}")
