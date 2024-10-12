@@ -603,7 +603,6 @@ class BootstrapSystem:
         dict[int, dict[str, SingleTraceOperator | DoubleTraceOperator]]
             The linear and quadratic constraints.
         """
-        identity = SingleTraceOperator(data={(): 1})
         quadratic_constraints = {}
         linear_constraints = {}
         for op_idx, op in enumerate(self.operator_list):
@@ -613,29 +612,6 @@ class BootstrapSystem:
                     raise ValueError(f"op should be tuple, not {type(op)}")
 
                 eq_lhs, eq_rhs = self.generate_cyclic_constraint(op=op)
-
-                """
-                # the LHS corresponds to single trace operators
-                eq_lhs = SingleTraceOperator(data={op: 1}) - SingleTraceOperator(
-                    data={op[1:] + (op[0],): 1}
-                )
-
-                # rhe RHS corresponds to double trace operators
-                # eq_rhs = []
-                eq_rhs = DoubleTraceOperator(data={})
-                for k in range(1, len(op)):
-                    commutator = self.matrix_system.commutation_rules[(op[0], op[k])]
-                    st_operator_1 = SingleTraceOperator(data={tuple(op[1:k]): 1})
-                    st_operator_2 = SingleTraceOperator(data={tuple(op[k + 1 :]): 1})
-
-                    # If the double trace term involves <tr(1)> simplify and add to the linear, LHS
-                    if st_operator_1 == identity:
-                        eq_lhs -= commutator * st_operator_2
-                    elif st_operator_2 == identity:
-                        eq_lhs -= commutator * st_operator_1
-                    else:
-                        eq_rhs += commutator * (st_operator_1 * st_operator_2)
-                """
 
                 # if the quadratic term vanishes but the linear term is non-zero, record the constraint as being linear
                 if not eq_lhs.is_zero() and eq_rhs.is_zero():
