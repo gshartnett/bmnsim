@@ -171,6 +171,7 @@ def solve_bootstrap(
             + penalty_reg * psd_loss(param_null, param_particular)
             + penalty_reg * quadratic_loss(param_null, param_particular)
             + penalty_reg * Axb_loss(param_null, param_particular)
+            #+ 1e2 * torch.abs(torch.linalg.norm(get_full_param(param_null, param_particular)) - 1e3)
         )
         return loss
 
@@ -198,10 +199,6 @@ def solve_bootstrap(
     optimizer = optim.Adam([param_null], lr=lr)
     scheduler = ExponentialLR(optimizer, gamma=gamma)
 
-    # early stopping stuff
-    old_loss = np.inf
-    early_stopping_counter = 0
-
     for epoch in range(num_epochs):
 
         optimizer.zero_grad()
@@ -212,30 +209,6 @@ def solve_bootstrap(
 
         with torch.no_grad():
 
-            # early stopping
-            '''
-            current_loss = loss.detach().cpu().item()
-            violation_of_linear_constraints = Axb_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
-            min_bootstrap_eigenvalue = psd_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
-            quad_constraint_violation_norm = quadratic_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
-            tolerance_satisfied = (violation_of_linear_constraints < tol) and np.abs(min_bootstrap_eigenvalue) < tol and (quad_constraint_violation_norm < tol)
-            if np.abs(current_loss - old_loss) < early_stopping_tol:
-                early_stopping_counter += 1
-            else:
-                early_stopping_counter = 0
-            if tolerance_satisfied and (early_stopping_counter > patience):
-                debug(f"Early stopping triggered after {epoch + 1} epochs.")
-                break
-            old_loss = current_loss
-
-            #if epoch > 4000 and violation_of_linear_constraints > 1e-2:
-            #    break
-            '''
-            # abort if the PSD constraint is not able to be satisfied after a reasonable number of iterationsn
-            #min_bootstrap_eigenvalue = psd_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
-            #if epoch > 10_000 and abs(min_bootstrap_eigenvalue) > 1e-2:
-            #    break
-
             if ((epoch + 1) % 100 == 0) or (epoch == num_epochs - 1):
                 total_loss = loss.detach().cpu().item()
                 operator_value = operator_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
@@ -243,9 +216,10 @@ def solve_bootstrap(
                 min_bootstrap_eigenvalue = psd_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
                 quad_constraint_violation_norm = quadratic_loss(param_null=param_null, param_particular=param_particular).detach().cpu().item()
                 quad_constraint_violation_max = quadratic_constraint_max(param_null=param_null, param_particular=param_particular).detach().cpu().item()
+                param_norm = torch.linalg.norm(get_full_param(param_null, param_particular))
 
                 debug(
-                    f"epoch: {epoch+1}/{num_epochs}, lr: {scheduler.get_last_lr()[0]:.3e} total_loss: {total_loss:.3e}: op_loss: {operator_value:.5f}, ||Ax-b||: {violation_of_linear_constraints:.3e}, min_eig: {min_bootstrap_eigenvalue:.3e}, ||quad cons||: {quad_constraint_violation_norm:.3e}"
+                    f"epoch: {epoch+1}/{num_epochs}, lr: {scheduler.get_last_lr()[0]:.3e} total_loss: {total_loss:.3e}: op_loss: {operator_value:.5f}, ||x||: {param_norm:.3e}, ||Ax-b||: {violation_of_linear_constraints:.3e}, min_eig: {min_bootstrap_eigenvalue:.3e}, ||quad cons||: {quad_constraint_violation_norm:.3e}"
                 )
 
         # clean up
