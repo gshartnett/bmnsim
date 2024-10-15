@@ -66,7 +66,7 @@ class BornOppenheimer:
         np.ndarray
             The local energy term (represented as a 1D array).
         """
-        return (np.pi**2 / 3) * rho**2 + self.m**2 * x_grid**2 * rho
+        return (np.pi**2 / 3) * rho**3 + self.m**2 * x_grid**2 * rho
 
     def non_local_energy_term(self, rho: np.ndarray, x_grid: np.ndarray) -> np.ndarray:
         """
