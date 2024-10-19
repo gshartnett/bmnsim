@@ -199,8 +199,16 @@ def main(m: float=1, g: float=1, npoints: int=100):
     optimal_energy_me = result.fun
 
     print(f"Minimum BO energy for m={m}, g={g}: E={optimal_energy_HHK:.4f} (HHK conventions)")
-    print(f"Minimum BO energy for m={born_oppenheimer.m}, g={born_oppenheimer.g}: E={optimal_energy_me:.4f} (my conventions)")
+    print(f"Minimum BO energy for g2={born_oppenheimer.g2}, g4={born_oppenheimer.g4}: E={optimal_energy_me:.4f} (my conventions)")
     print(f"The results should be off by a factor of two: diff={(optimal_energy_me - optimal_energy_HHK / 2):.4e}.")
+
+    # massless case
+    g2 = 0
+    g4 = 1
+    born_oppenheimer = BornOppenheimer(g2=g2, g4=g4)
+    result = born_oppenheimer.solve(x_grid=x_grid)
+    optimal_energy_me = result.fun
+    print(f"\nMinimum BO energy for g2={born_oppenheimer.g2}, g4={born_oppenheimer.g4}: E={optimal_energy_me:.4f} (my conventions)")
 
 
 if __name__ == "__main__":
