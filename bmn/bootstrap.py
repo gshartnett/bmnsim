@@ -486,6 +486,9 @@ class BootstrapSystem:
         list[SingleTraceOperator]
             The list of constraint terms.
         """
+        if self.gauge_generator is None:
+            raise ValueError("Error, no gauge generator provided.")
+
         constraints = []
         for op_idx, op in enumerate(self.operator_list):
             constraints.append(

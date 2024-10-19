@@ -20,6 +20,7 @@ bootstrap_keys = [
     "simplify_quadratic",
     "impose_symmetries",
     "symmetry_method",
+    "impose_gauge_symmetry",
     "load_from_previously_computed",
     "checkpoint_path",
     ]
@@ -32,8 +33,6 @@ optimization_keys_newton=[
     "cvxpy_solver",
     "tol",
     'reg',
-    "penalty_reg",
-    #"penalty_reg_decay_rate",
     "eps_abs",
     "eps_rel",
     "eps_infeas",
@@ -55,13 +54,11 @@ optimization_keys_pytorch=[
 def generate_optimization_config_newton(
     PRNG_seed=None,
     init=None,
-    init_scale=1e2,
+    init_scale=1e-2,
     maxiters=100,
     maxiters_cvxpy=10_000,
     tol=1e-7,
     reg=1e-4,
-    penalty_reg=0,
-    #penalty_reg_decay_rate=None,
     eps_abs=1e-5,
     eps_rel=1e-5,
     eps_infeas=1e-7,
@@ -77,8 +74,6 @@ def generate_optimization_config_newton(
         "maxiters_cvxpy": maxiters_cvxpy,
         "tol": tol,
         "reg": reg,
-        'penalty_reg': penalty_reg,
-        #"penalty_reg_decay_rate": penalty_reg_decay_rate,
         "eps_abs": eps_abs,
         "eps_rel": eps_rel,
         "eps_infeas": eps_infeas,
@@ -128,6 +123,7 @@ def generate_bootstrap_config(
     simplify_quadratic=True,
     impose_symmetries=True,
     load_from_previously_computed=False,
+    impose_gauge_symmetry=True,
     checkpoint_path=None,
     symmetry_method="complete",
     ):
@@ -140,6 +136,7 @@ def generate_bootstrap_config(
         "simplify_quadratic": simplify_quadratic,
         "impose_symmetries": impose_symmetries,
         "symmetry_method": symmetry_method,
+        "impose_gauge_symmetry": impose_gauge_symmetry,
         "load_from_previously_computed": load_from_previously_computed,
         "checkpoint_path": checkpoint_path,
         }
@@ -402,6 +399,10 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
     if not config_bootstrap["impose_symmetries"]:
         model.symmetry_generators = None
 
+    # handle the imposition of gauge symmetries
+    if not config_bootstrap["impose_gauge_symmetry"]:
+        model.gauge_generator = None
+
     # operator to minimize
     if config_bootstrap["st_operator_to_minimize"] is None:
         st_operator_to_minimize = None
@@ -425,6 +426,7 @@ def run_bootstrap_from_config(config_filename, config_dir, verbose=True, check_i
         odd_degree_vanish=config_bootstrap["odd_degree_vanish"],
         simplify_quadratic=config_bootstrap["simplify_quadratic"],
         symmetry_generators=model.symmetry_generators,
+        #impose_gauge_symmetry=config_bootstrap["impose_gauge_symmetry"],
         verbose=verbose,
         checkpoint_path=checkpoint_path,
     )
