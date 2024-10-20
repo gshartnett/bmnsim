@@ -178,7 +178,7 @@ def solve_bootstrap(
     # initialize the variable vector
     if init is None:
         init = init_scale * np.random.randn(bootstrap.param_dim_null)
-        param_particular = np.linalg.lstsq(A.cpu().numpy(), b.cpu().numpy())[0]
+        param_particular = np.linalg.lstsq(A.cpu().numpy(), b.cpu().numpy(), rcond=None)[0]
         param_null = init
         debug(f"Initializing param to be the least squares solution of Ax=b plus Gaussian noise with scale = {init_scale}.")
     else:

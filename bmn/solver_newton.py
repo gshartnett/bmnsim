@@ -472,6 +472,7 @@ def solve_bootstrap(
         init = np.asarray(init)
         debug(f"Initializing as param={init}")
     param_array = init
+    param_array_old = None
 
     # map the single trace operator whose expectation value we wish to minimize to a coefficient vector
     if st_operator_to_minimize is not None:
@@ -550,21 +551,22 @@ def solve_bootstrap(
 
         # build a penalty term to enforce Ax=b for the linearized quadratic constraints
         # NOTE only used for the original, non-null sdp_minimize method
-        linear_inhomogeneous_penalty = (
-            quad_cons_grad,
-            np.asarray(quad_cons_grad.dot(param_array) - quad_cons_val)[0],
-        )
+        #linear_inhomogeneous_penalty = (
+        #    quad_cons_grad,
+        #    np.asarray(quad_cons_grad.dot(param_array) - quad_cons_val)[0],
+        #)
 
         # get the null space projector
         A, b = linear_inhomogeneous_eq
         A = A.todense()
+
         param_particular = np.linalg.lstsq(A, b, rcond=None)[0]
         null_space_matrix = get_null_space_dense(matrix=A)
         null_space_projector = null_space_matrix @ np.linalg.pinv(null_space_matrix)
 
         # perform the inner convex minimization
         try:
-            param_array, optimization_result = sdp_minimize_null(
+            param_array_soln, optimization_result = sdp_minimize_null(
                 linear_objective_vector=linear_objective_vector,
                 bootstrap_table_sparse=bootstrap_table_sparse,
                 linear_inhomogeneous_eq=linear_inhomogeneous_eq,
@@ -579,8 +581,16 @@ def solve_bootstrap(
                 verbose=False,
                 cvxpy_solver=cvxpy_solver,
             )
+
         except:
             return None, None
+
+        # interpolate between the old and new solutions
+        alpha = 1.0
+        if step < 2:
+            param_array = param_array_soln
+        else:
+            param_array = alpha * param_array_soln + (1 - alpha) * param_array
 
         # print out some diagnostic information
         quad_cons_val = get_quadratic_constraint_vector(
