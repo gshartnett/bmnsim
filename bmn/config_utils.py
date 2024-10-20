@@ -272,7 +272,6 @@ def generate_config_three_matrix(
         "optimizer": optimization_config_dict,
     }
 
-    print(config_data)
     # write to yaml
     #if not os.path.exists(f"configs/{config_dir}"):
     os.makedirs(f"configs/{config_dir}", exist_ok=True)
